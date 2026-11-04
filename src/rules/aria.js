@@ -4,10 +4,14 @@ import { m, fail, review, guessIconName, AMBIGUOUS_LINK_TEXT } from './util.js';
 
 const nameFold = (s) => normalize(s).toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim();
 
+/** Холбоосын ӨМНӨ байрлах хамгийн ойрын гарчиг (хуваалцсан container-т буруу картын гарчиг авахгүй) */
 function nearestHeadingText(el) {
   const card = el.closest('article, li, section, .card, [class*="card"], [class*="item"], [class*="post"]');
-  const h = card?.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"]');
-  return h ? normalize(h.textContent) : null;
+  if (!card) return null;
+  const preceding = [...card.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]')]
+    .filter((h) => h.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+  const h = preceding[preceding.length - 1];
+  return h ? normalize(h.textContent) || null : null;
 }
 
 export default [
@@ -62,7 +66,7 @@ export default [
       return review(el, m(`Холбоосын текст "${accessibleName(el)}" нь зорилгоо дангаараа илэрхийлэхгүй. Контекстоо (жишээ нь гарчгийг) нэмнэ үү.`, `Link text "${accessibleName(el)}" does not describe its purpose on its own. Add context such as the heading.`));
     },
     fix: {
-      tier: 'heuristic',
+      tier: 'heuristic', onReview: true,
       apply(f, ctx) {
         const h = nearestHeadingText(f.node);
         if (!h) return false;
@@ -230,23 +234,31 @@ export default [
     sc: ['4.1.2', '1.3.1'],
     impact: 'serious',
     selector: '[aria-hidden="true"]',
-    evaluate(el) {
-      if (el === document.body || el === document.documentElement) {
+    evaluate(el, ctx) {
+      if (el === ctx.doc.body || el === ctx.doc.documentElement) {
         return fail(el, m(`<${el.localName}> дээр aria-hidden="true" — хуудас бүхэлдээ дэлгэц уншигчаас нуугдсан.`, `aria-hidden="true" on <${el.localName}> hides the whole page.`), { whole: true });
       }
       const focusables = [el, ...el.querySelectorAll('a[href], button, input, select, textarea, [tabindex], iframe, summary, [contenteditable="true"]')]
         .filter((n) => isFocusable(n) && isVisible(n) && !n.disabled);
       if (!focusables.length) return null;
+      // Modal нээлттэй үед арын контентыг aria-hidden болгох нь түгээмэл загвар (focus trap хамгаална) — хянах л зүйл
+      const modalOpen = !!ctx.doc.querySelector('dialog[open], [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]');
+      if (modalOpen && !el.closest('dialog[open], [aria-modal="true"]')) {
+        return review(focusables[0], m('Modal нээлттэй байхад арын контент aria-hidden болсон; дотор нь фокуслах элемент байна. Modal хаагдахад aria-hidden арилж буйг, эсвэл inert ашиглахыг шалгана уу.', 'Background content is aria-hidden while a modal is open and contains focusable elements. Verify aria-hidden is removed on close, or use inert.'), { container: el, count: focusables.length, modal: true });
+      }
       return fail(focusables[0], m('aria-hidden="true" дотор фокуслах боломжтой элемент байна — дэлгэц уншигч "хоосон" фокус дээр зогсоно.', 'Focusable element inside aria-hidden="true" — screen readers land on a "ghost" control.'), { container: el, count: focusables.length });
     },
     fix: {
       tier: 'heuristic',
       apply(f, ctx) {
-        if (f.data?.whole) return false;
+        if (f.data?.whole || f.data?.modal) return false;
         const box = f.data.container;
-        // Нүдэнд харагдаж байвал aria-hidden-ыг буруу хэрэглэсэн байх магадлалтай -> inert биш, нуухыг болиулна
+        // Дэлгэцэнд бодитоор харагдаж байвал aria-hidden-ыг буруу хэрэглэсэн байх магадлалтай -> нуухыг болиулна.
+        // Дэлгэцийн гадна (off-canvas drawer, carousel slide) бол нуусан хэвээр үлдээж фокусаас хасна.
         const r = box.getBoundingClientRect();
-        if (r.width > 1 && r.height > 1 && getComputedStyle(box).visibility === 'visible' && getComputedStyle(box).opacity !== '0') {
+        const w = ctx.win;
+        const onScreen = r.right > 0 && r.bottom > 0 && r.left < w.innerWidth && r.top < w.innerHeight;
+        if (onScreen && r.width > 1 && r.height > 1 && getComputedStyle(box).visibility === 'visible' && getComputedStyle(box).opacity !== '0') {
           ctx.changes.removeAttr(box, 'aria-hidden', 'aria-hidden-focus');
           return m('Харагдаж буй хэсгээс aria-hidden-ыг авав.', 'Removed aria-hidden from visible content.');
         }

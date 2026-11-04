@@ -4,7 +4,8 @@
  * Сайтын бусад скриптээс ӨМНӨ ачаалагдсан үед л бүрэн ажиллана.
  */
 const KEY = '__hurteemjClickTargets';
-const TYPES = new Set(['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']);
+// Зөвхөн 'click': pointerdown/touchstart нь чирэх, swipe, carousel container-т түгээмэл тул control гэж үзэх боломжгүй
+const TYPES = new Set(['click']);
 
 export function trackListeners(win = typeof window !== 'undefined' ? window : null) {
   if (!win || win[KEY]) return win?.[KEY];

@@ -77,11 +77,11 @@ export const REQUIRED_ATTRS = {
   switch: ['aria-checked'],
 };
 
-/** Нэр заавал шаардлагатай widget/бүтцийн үүргүүд */
+/** Нэр заавал шаардлагатай үүргүүд (ARIA 1.2 "Accessible Name Required: True"). menu/menubar/toolbar нь зөвлөмж л тул ороогүй. */
 export const NAME_REQUIRED = new Set(['button', 'link', 'checkbox', 'combobox', 'listbox', 'menuitem',
   'menuitemcheckbox', 'menuitemradio', 'meter', 'option', 'progressbar', 'radio', 'radiogroup', 'searchbox',
   'slider', 'spinbutton', 'switch', 'tab', 'tabpanel', 'textbox', 'treeitem', 'dialog', 'alertdialog',
-  'img', 'image', 'tree', 'grid', 'treegrid', 'table', 'form', 'region', 'menu', 'menubar', 'toolbar']);
+  'img', 'image', 'tree', 'grid', 'treegrid', 'table', 'form', 'region']);
 
 export const INTERACTIVE_ROLES = new Set(['button', 'link', 'checkbox', 'combobox', 'listbox', 'menuitem',
   'menuitemcheckbox', 'menuitemradio', 'option', 'radio', 'searchbox', 'slider', 'spinbutton', 'switch',

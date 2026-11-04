@@ -81,7 +81,7 @@ body :is(a[href],button,[role="button"],label,select,summary,[onclick])${NOT_UI}
 body :is(nav,header,footer,[role="navigation"],[role="menu"],[role="toolbar"]) a[href]${NOT_UI}{display:inline-block!important;min-height:44px!important;min-width:44px!important;padding-block:10px!important;box-sizing:border-box!important}
 body input:is([type="checkbox"],[type="radio"])${NOT_UI}{width:24px!important;height:24px!important}`);
   }
-  if (p.hideImages) css.push(`body :is(img,picture,video,svg[role="img"],[role="img"])${NOT_UI}{opacity:0!important}
+  if (p.hideImages) css.push(`body :is(img,picture,video,svg[role="img"],[role="img"])${NOT_UI}, body canvas[${HOST_ATTR}="gif"]{opacity:0!important}
 body *${NOT_UI}{background-image:none!important}`);
   return css.join('\n');
 }
@@ -158,13 +158,24 @@ export function createPreferences({ doc, win, config, storage, onChange }) {
     }
   }
 
-  function motion(root = doc) {
+  let motionOn = false;
+
+  /**
+   * Хөдөлгөөн зогсоох. Зөвхөн off→on шилжилтэд бүх хуудсыг, `root` өгсөн үед (шинэ контент) зөвхөн тэр хэсгийг зогсооно —
+   * хэрэглэгчийн өөрөө тоглуулсан видео, дараа нь эхэлсэн анимацийг тохиргоо өөрчлөх бүрт дахин зогсоохгүй.
+   */
+  function motion(root) {
     if (prefs.stopMotion) {
-      root.querySelectorAll('video[autoplay], video').forEach((v) => { if (!v.paused && !v.closest(`[${HOST_ATTR}]`)) { v.pause(); paused.add(v); } });
-      doc.getAnimations?.().forEach((a) => { try { if (a.playState === 'running') { a.pause(); paused.add(a); } } catch { /* ignore */ } });
+      const transition = !motionOn;
+      motionOn = true;
+      const scope = root || doc;
+      if (!transition && !root) return;
+      scope.querySelectorAll('video').forEach((v) => { if (!v.paused && !v.closest(`[${HOST_ATTR}]`)) { v.pause(); paused.add(v); } });
+      const anims = root ? root.getAnimations?.({ subtree: true }) : doc.getAnimations?.();
+      anims?.forEach((a) => { try { if (a.playState === 'running') { a.pause(); paused.add(a); } } catch { /* ignore */ } });
       // GIF-ийг эхний фрэймээр царцаана
-      root.querySelectorAll('img[src*=".gif" i]').forEach((img) => {
-        if (frozen.has(img) || !img.complete || !img.naturalWidth) return;
+      scope.querySelectorAll('img[src*=".gif" i], img[src^="data:image/gif" i]').forEach((img) => {
+        if (frozen.has(img) || !img.complete || !img.naturalWidth || img.closest(`[${HOST_ATTR}]`)) return;
         try {
           const c = doc.createElement('canvas');
           c.width = img.naturalWidth; c.height = img.naturalHeight;
@@ -173,17 +184,23 @@ export function createPreferences({ doc, win, config, storage, onChange }) {
           c.style.cssText = img.style.cssText;
           c.style.width = `${img.width}px`;
           c.style.height = `${img.height}px`;
-          c.setAttribute('role', 'img');
-          c.setAttribute('aria-label', img.alt || '');
+          c.setAttribute(HOST_ATTR, 'gif'); // plugin-ийн өөрийн элемент — аудит, ажиглагч үл тоомсорлоно
+          if (img.alt) { c.setAttribute('role', 'img'); c.setAttribute('aria-label', img.alt); } else { c.setAttribute('role', 'presentation'); c.setAttribute('aria-hidden', 'true'); }
           img.insertAdjacentElement('beforebegin', c);
+          const display = { value: img.style.getPropertyValue('display'), priority: img.style.getPropertyPriority('display') };
           img.style.setProperty('display', 'none', 'important');
-          frozen.set(img, c);
+          frozen.set(img, { c, display });
         } catch { /* ignore */ }
       });
     } else {
+      if (!motionOn) return;
+      motionOn = false;
       for (const p of paused) { try { p.play(); } catch { /* ignore */ } }
       paused.clear();
-      for (const [img, c] of frozen) { c.remove(); img.style.removeProperty('display'); }
+      for (const [img, { c, display }] of frozen) {
+        c.remove();
+        display.value ? img.style.setProperty('display', display.value, display.priority) : img.style.removeProperty('display');
+      }
       frozen.clear();
     }
   }
@@ -218,10 +235,12 @@ export function createPreferences({ doc, win, config, storage, onChange }) {
   function reset() { set({ ...DEFAULT_PREFS }); }
 
   /** Шинээр нэмэгдсэн DOM-д тохиргоог давтан хэрэглэх (SPA) */
-  function refresh(root) {
+  function refresh(roots) {
     // Шинэ элемент масштаблагдсан эцгээс хэмжээ өвлөсөн байж болох тул бүгдийг дахин хэмжинэ
     if (prefs.fontScale !== 1) { unscale(); scaleText(); }
-    if (prefs.stopMotion) motion(root.querySelectorAll ? root : doc);
+    if (!prefs.stopMotion) return;
+    const list = Array.isArray(roots) ? roots : roots ? [roots] : [];
+    for (const r of list) if (r && r.querySelectorAll && r.isConnected) motion(r);
   }
 
   function destroy() {

@@ -94,7 +94,7 @@ export default [
       return null;
     },
     fix: {
-      tier: 'heuristic',
+      tier: 'heuristic', onReview: true,
       apply(f, ctx) {
         // Латин бичгийг "en" гэж таах нь эрсдэлтэй тул зөвхөн кирилл+монгол үсэг байвал mn гэж өгнө
         const { script, mnHint } = scriptOf(f.node.textContent);
@@ -228,7 +228,7 @@ export default [
       return [];
     },
     fix: {
-      tier: 'heuristic',
+      tier: 'heuristic', onReview: true,
       apply(f, ctx) {
         if (f.outcome !== 'review') return false;
         for (const sel of MAIN_CANDIDATES.slice(0, -2)) {
@@ -262,7 +262,7 @@ export default [
       return [out(doc.body, m('"Үндсэн агуулга руу шилжих" (skip link) холбоос алга. Гарын хэрэглэгч навигацийг дахин дахин дамжих болно.', 'No "Skip to main content" link. Keyboard users must tab through navigation on every page.'), { hasMain })];
     },
     fix: {
-      tier: 'safe',
+      tier: 'safe', onReview: true,
       apply(f, ctx) {
         const target = findMainTarget(ctx.doc);
         if (!target) return false;

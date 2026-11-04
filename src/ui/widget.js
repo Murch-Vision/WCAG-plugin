@@ -322,7 +322,15 @@ export function createWidget({ doc, win, config, prefs, t, getLang, setLang, onA
     open: () => show(),
     close: hide,
     toggle,
-    refresh: () => { if (open) rerender(keyOf(shadow.activeElement)); updateGuide(); },
+    // Фокус самбарын гадна байвал (хэрэглэгч хуудсанд бичиж байхад SPA шинэчлэгдэх) фокусыг булаахгүй
+    refresh: () => {
+      if (open) {
+        const k = shadow.activeElement ? keyOf(shadow.activeElement) : null;
+        render();
+        if (k) focusKey(k);
+      }
+      updateGuide();
+    },
     destroy() {
       doc.removeEventListener('keydown', onKey, true);
       doc.removeEventListener('click', onOpenTrigger);

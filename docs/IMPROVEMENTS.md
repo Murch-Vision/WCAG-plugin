@@ -23,6 +23,31 @@
 | 14 | **Бага** | WordPress: `wp_enqueue_script` `strategy` параметр нь WP 6.3+ шаарддаг ч `Requires at least: 6.0` гэсэн; `sanitize_hex_color()` зарим контекстэд тодорхойлогдоогүй байж болно. | 6.3; regex-ээр шалгана. | — |
 | 15 | **Бага** | `destroy()` SPA ажиглагчийн таймеруудыг цэвэрлэдэггүй. | `observer.destroy()` бүх таймер, hook-ийг буцаана. | `regression: destroy()` |
 
+## 1b. Бие даасан хяналтын (2-р шат) олдворууд
+
+Кодыг бичсэн хүнээс хамааралгүй, зөвхөн эх кодыг уншсан хоёр дахь хянагч 16 олдвор гаргасан. 3 нь 1-р шатанд аль хэдийн засагдсан байв (#2, #8/paste давхардал, #14/WP 6.3, #15/destroy таймер). Үлдсэн 13-ыг шалгаж бүгдийг зассан:
+
+| # | Хүнд байдал | Асуудал | Засвар | Тест |
+|---|---|---|---|---|
+| R1 | **Өндөр** | `focus-visible` дүрэм CSS дүрэм бүрийг тусад нь үнэлдэг тул зөвлөмжийн загвар болох `button:focus{outline:none}` + `button:focus-visible{outline:…}` эсвэл `:focus:not(:focus-visible){outline:none}`-ийг **зөрчил** гэж үзээд safe засвар нь сайтын өөрийн фокусын загвар дээр глобал `!important` тойм давхарлаж байсан. | `:not(:focus-visible)` сонгогчийг алгасна; `:focus-visible` дээр тэмдэглэгээ өгсөн суурь сонгогчдыг цуглуулж, ижил суурьтай `:focus{outline:none}`-ийг зөв загвар гэж үзнэ. Сайт хаа нэгтээ `:focus-visible` ашигладаг бол fail биш review. | `review: focus-visible` |
+| R2 | **Өндөр** | `click-without-keyboard`: event delegation container (React 17+ `#root`, jQuery `.on('click', sel)`) бүртгэгдсэн listener-тэй тул **critical** зөрчил болж, heuristic засвар `#root`-д `role="button"` өгч апп бүхэлдээ нэг товч болж байсан. | Дотроо идэвхтэй элемент, 5-аас олон хүүхэд эсвэл 120+ тэмдэгт тексттэй элементийг control гэж үзэхгүй. Listener tracker зөвхөн `click`-ийг бүртгэнэ (pointerdown/touchstart нь чирэх, swipe container-т түгээмэл). | `review: click-without-keyboard` |
+| R3 | **Өндөр** | `widget.refresh()` SPA шинэчлэлт бүрт самбарыг дахин зурж, фокус хуудсанд байсан ч самбарын гарчиг руу **фокус булааж** байсан (хэрэглэгч хайлтын талбарт бичиж байхад). | Фокус самбар дотор байсан үед л сэргээнэ. | `review: Самбар нээлттэй байхад` |
+| R4 | **Өндөр** | `backgroundOf()`: `pointer-events:none` эсвэл мөр хоорондын цэгт `elementsFromPoint` элементийг өөрийг нь буцаахгүй үед түүний болон завсрын эцгүүдийн дэвсгэрийг алгасаж, хар дэвсгэр дээрх цагаан текстийг **1:1** гэж үзээд heuristic засвар саарал болгож байсан. | Hit-test-д ороогүй `el → hit[idx]` хүртэлх эцгийн гинжийг стекийн өмнө нэмнэ. `ownerDocument`/`defaultView` ашиглаж iframe-д зөв. | `review: color-contrast pointer-events` |
+| R5 | **Дунд** | `applyFixes` олдворын төлвийг (fail/review) үл харгалзан засвар хийдэг тул safe горимд `<video autoplay muted loop>` (review) дээр `controls` нэмэх, 3.8:1 хувилбартай холбоост доогуур зураас албадах зэрэг **нийцтэй хуудсыг** өөрчилж байсан. | Хөдөлгүүрт: review олдворт зөвхөн `fix.onReview: true` засвар хэрэглэгдэнэ (7 дүрэм: landmark-main, bypass, link-purpose, autocomplete-purpose, lang-of-parts, svg-img-name, accessible-auth-autocomplete). | `review: Safe засвар` |
+| R6 | **Дунд** | `aria-hidden-focus` heuristic засвар modal нээлттэй үед (MUI, react-modal, a11y-dialog загвар) апп-ын `#root`-оос `aria-hidden`-ыг хууулж, off-canvas drawer-ыг дэлгэц уншигчид ил болгож байсан. | Modal нээлттэй бол review; дэлгэцийн гадна байгаа container-т `aria-hidden` хэвээр, доторх элементийг `tabindex="-1"`. | `review: aria-hidden-focus` |
+| R7 | **Дунд** | `link-purpose` засвар container доторх **эхний** гарчгийг авдаг тул хуваалцсан хэсэгт B картын "Дэлгэрэнгүй" холбоос A картын гарчигтай болж байсан — өмнөхөөс дор. | Холбоосын өмнө байрлах хамгийн ойрын гарчиг (`compareDocumentPosition`). | `review: link-purpose` |
+| R9 | **Дунд** | `data-lang=""`, `data-only=""`, `data-shortcut=""` зэрэг хоосон атрибут `true` болж `true.split`, `new Set(true)`, `sc.toLowerCase` TypeError — plugin эхлэхгүй, CLI мөнхөд хүлээнэ. | Хоосон утга зөвхөн boolean түлхүүрт `true`, бусдад "тохируулаагүй". `normalizeConfig` мөр бус утгыг анхдагч руу. | `review: Хоосон data-*` |
+| R10 | **Дунд** | `destroy()`-н дараа хүлээгдэж буй навигацийн аудит ажиллаж, засваруудыг буцаах боломжгүйгээр дахин хэрэглэж байсан. | `observer.destroy()` таймеруудыг цэвэрлэнэ; `audit()`/`fix()` destroyed төлөвт юу ч хийхгүй. | `regression: destroy()` |
+| R11 | **Бага** | `non-text-contrast` `<input type="file">` (UA хүрээгүй) болон box-shadow "ring"-тэй талбарыг зөрчил гэж үзээд саарал хүрээ зурж байсан. | `type=file`-ыг хасав; box-shadow/outline байвал хил хязгаартай гэж үзнэ. | `review: non-text-contrast` |
+| R12 | **Бага** | `motion()` тохиргоо өөрчлөх бүрт (`fontScale +`) дахин ажиллаж, хэрэглэгчийн өөрөө тоглуулсан видео, дараа нь эхэлсэн анимацийг дахин зогсоож байсан. | Зөвхөн off→on шилжилтэд бүх хуудсыг, шинэ контентод зөвхөн тэр хэсгийг зогсооно. | `review: stopMotion` |
+| R13 | **Бага** | Царцаасан GIF-ийн `<canvas>` `role="img" aria-label=""` тул plugin өөрийн элементийг `svg-img-name` зөрчил гэж олдог; чимэглэлийн GIF-д aria-hidden өгөөгүй; анхны inline `display` алдагддаг. | `data-hurteemj-ui="gif"`, alt-гүй бол `aria-hidden`, display-г хадгалж сэргээнэ; `data:image/gif` URI-г таних. | `review: stopMotion` |
+| R14 | **Бага** | `NAME_REQUIRED`-д `menu`, `menubar`, `toolbar` орсон — ARIA 1.2-т нэр заавал биш тул `<ul role="menu">` худал зөрчил. | Хасав. | `review: role=menu` |
+| R15 | **Бага** | `link-in-text-block` box-shadow / gradient доогуур зураасны техникийг танихгүй давхар зураас нэмж байсан. | box-shadow эсвэл background-image байвал хангасан гэж үзнэ. | `review: Safe засвар` |
+
+Хянагч зөв гэж баталгаажуулсан хэсгүүд: `ChangeLog.revert` дараалал, Shadow DOM самбарын escape (бүх хуудаснаас ирсэн мөр `esc()`-ээр), AccName labelledby/visited, target-size геометр, viewport/meta-refresh засвар, cookie/localStorage хамгаалалт, WordPress-ийн escaping/capability/nonce.
+
+Тестийн тоо: 30 → **40**.
+
 ## 2. Бүтцийн өөрчлөлт (refactor)
 
 | Өмнө | Одоо | Шалтгаан |
@@ -35,7 +60,7 @@
 | GitHub Actions `@v4` (Node 20 deprecated анхааруулга) | `checkout@v5`, `setup-node@v5`, `permissions: contents: read`, timeout, тайлангийн artifact, CLI exit code-ийн smoke тест | Анхааруулгагүй, хамгийн бага эрхтэй |
 | `api.changes()` DOM node буцаадаг | `ChangeLog.summary()` — tag нэртэй, node-гүй | Тайланд JSON-оор хэвлэх боломжтой |
 
-Тестийн тоо: 18 → **30** (6 unit + 7 regression нэмэгдсэн).
+Тестийн тоо (1-р шат): 18 → 30 (6 unit + 7 regression нэмэгдсэн).
 
 ## 3. Хэрэгжүүлээгүй сайжруулалтын санал (эрэмбэлсэн)
 

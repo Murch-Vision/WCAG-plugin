@@ -61,6 +61,7 @@ export function init(userConfig = {}) {
   let observer = null;
 
   async function audit({ deep = config.deep, fix = true, scope } = {}) {
+    if (state.destroyed) return state.report;
     state.busy = true;
     try {
       const rep = runAudit({ doc, win, config, deep, runtime, changes, clickTracked, pageLang: pageLang(), scope });
@@ -81,7 +82,9 @@ export function init(userConfig = {}) {
   }
 
   async function fix({ tier = config.fix || 'safe', ids } = {}) {
+    if (state.destroyed) return 0;
     if (!state.report) await audit({ fix: false });
+    if (!state.report) return 0;
     state.busy = true;
     try {
       const n = await applyFixes(state.report, { doc, win, config: { ...config, fix: tier }, runtime, changes, pageLang: pageLang(), onlyIds: ids });
@@ -122,7 +125,7 @@ export function init(userConfig = {}) {
       onPartial: async (roots) => {
         if (state.destroyed) return;
         if (config.audit) for (const r of roots) await audit({ scope: r, deep: false });
-        prefs.refresh();
+        prefs.refresh(roots);
         widget?.refresh();
       },
       onNavigate: async () => {

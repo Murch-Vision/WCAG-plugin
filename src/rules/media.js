@@ -116,7 +116,7 @@ export default [
       return fail(el, m('role="img" элемент нэргүй байна. aria-label эсвэл <title> нэмнэ үү.', 'Element with role="img" has no accessible name. Add aria-label or <title>.'));
     },
     fix: {
-      tier: 'safe',
+      tier: 'safe', onReview: true,
       apply(f, ctx) {
         if (f.data?.decorative) {
           ctx.changes.setAttr(f.node, 'aria-hidden', 'true', 'svg-img-name');

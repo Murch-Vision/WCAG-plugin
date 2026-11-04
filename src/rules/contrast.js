@@ -24,14 +24,21 @@ function gradientColors(bgImage) {
  * Буцаах: { color } | { colors:[...] } (gradient) | { unknown: reason }
  */
 export function backgroundOf(el) {
+  const doc = el.ownerDocument;
+  const win = doc.defaultView || window;
   const r = el.getBoundingClientRect();
   let stack = null;
   const cx = r.left + Math.min(r.width / 2, 20), cy = r.top + r.height / 2;
-  if (cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight) {
-    stack = document.elementsFromPoint(cx, cy).filter((n) => !isOwnUi(n));
-    const idx = stack.findIndex((n) => n === el || n.contains(el));
-    stack = idx >= 0 ? stack.slice(idx) : null;
-    // Элементийн өөрийн эцгүүдэд хамааралгүй, дээрээс давхарласан бол (overlay) — дараа шалгана
+  if (cx >= 0 && cy >= 0 && cx < win.innerWidth && cy < win.innerHeight) {
+    const hit = doc.elementsFromPoint(cx, cy).filter((n) => !isOwnUi(n));
+    const idx = hit.findIndex((n) => n === el || n.contains(el));
+    if (idx >= 0) {
+      // pointer-events:none эсвэл мөр хоорондын цэг: el өөрөө hit-test-д ороогүй бол el → hit[idx] хүртэлх эцгүүдийг нэмнэ
+      const chain = [];
+      if (hit[idx] !== el) for (let n = el; n && n !== hit[idx]; n = n.parentElement) chain.push(n);
+      stack = chain.concat(hit.slice(idx));
+    }
+    // idx < 0: el-тэй холбоогүй давхарга (overlay) — доорх эцгийн гинжээр тооцно
   }
   if (!stack) {
     stack = [];
@@ -142,6 +149,8 @@ export default [
       if (!linkText || blockText.length - linkText.length < 10) return null;
       if (/underline|line-through|overline/.test(s.textDecorationLine || s.textDecoration)) return null;
       if (s.borderBottomStyle !== 'none' && parseFloat(s.borderBottomWidth) > 0) return null;
+      // box-shadow / background-image (gradient) доогуур зураасны техник
+      if ((s.boxShadow && s.boxShadow !== 'none') || (s.backgroundImage && s.backgroundImage !== 'none')) return null;
       const ps = getComputedStyle(block);
       if (parseInt(s.fontWeight, 10) - parseInt(ps.fontWeight, 10) >= 300 || s.fontStyle !== ps.fontStyle) return null;
       const bg = backgroundOf(el);
@@ -169,10 +178,12 @@ export default [
     id: 'non-text-contrast',
     sc: ['1.4.11'],
     impact: 'serious',
-    selector: 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea',
+    selector: 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select, textarea',
     evaluate(el) {
       if (!isVisible(el) || isDisabled(el)) return null;
       const s = getComputedStyle(el);
+      // box-shadow "ring" (Material/Tailwind) эсвэл outline нь хил хязгаар болно — өнгийг нь найдвартай задлах боломжгүй тул хангасан гэж үзнэ
+      if ((s.boxShadow && s.boxShadow !== 'none') || (s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0)) return null;
       const outer = backgroundOf(el.parentElement || el);
       if (outer.unknown || outer.gradient) return null;
       const around = outer.color;

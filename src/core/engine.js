@@ -212,6 +212,8 @@ export async function applyFixes(report, { doc, win, config, runtime, changes, p
     if (f.fixed || (onlyIds && !onlyIds.includes(f.id))) continue;
     const rule = RULES.find((r) => r.id === f.ruleId);
     if (!rule?.fix) continue;
+    // "Хянах" (review) олдвор нь зөрчил биш байж болно — зөвхөн onReview гэж тэмдэглэсэн засвар л хэрэглэгдэнэ
+    if (f.outcome !== 'fail' && !rule.fix.onReview) continue;
     const setting = ruleSetting(config, rule.id);
     const tier = setting.fix === undefined ? globalTier : setting.fix === true ? 'safe' : setting.fix;
     if (!tier || !TIER[tier] || TIER[rule.fix.tier] > TIER[tier]) continue;

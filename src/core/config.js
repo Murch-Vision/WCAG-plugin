@@ -41,21 +41,26 @@ export const ATTR_MAP = {
 };
 
 const LIST_KEYS = new Set(['ignore', 'languages', 'only']);
+const BOOL_KEYS = new Set(['auditor', 'widget', 'launcher', 'observe', 'audit', 'deep', 'console', 'respectOS']);
+/** Мөр эсвэл false байж болох түлхүүрүүд */
+const STRING_OR_FALSE = new Set(['fix', 'storage', 'shortcut']);
+const STRING_KEYS = new Set(['lang', 'uiLang', 'color', 'focusColor', 'statementUrl', 'feedbackUrl', 'reportEndpoint', 'nonce', 'storageKey', 'cookieDomain', 'shortcutLabel']);
 const LEVELS = new Set(['A', 'AA', 'AAA']);
 const FIX_TIERS = new Set(['safe', 'heuristic']);
 const POSITIONS = new Set(['bottom-right', 'bottom-left', 'top-right', 'top-left']);
 const STORAGES = new Set(['local', 'cookie']);
 
-/** <script data-*> атрибутаас тохиргоо унших */
+/** <script data-*> атрибутаас тохиргоо унших. Хоосон утга ("") зөвхөн boolean түлхүүрт true, бусдад "тохируулаагүй". */
 export function configFromScript(script) {
   if (!script || typeof script.getAttribute !== 'function') return {};
   const out = {};
   for (const [k, a] of Object.entries(ATTR_MAP)) {
     const v = script.getAttribute(`data-${a}`);
     if (v === null) continue;
-    if (v === 'true' || v === '') out[k] = true;
-    else if (v === 'false') out[k] = false;
-    else if (LIST_KEYS.has(k)) out[k] = v.split(',').map((s) => s.trim()).filter(Boolean);
+    if (BOOL_KEYS.has(k)) { out[k] = !(v === 'false' || v === '0'); continue; }
+    if (v === '') continue;
+    if (STRING_OR_FALSE.has(k) && (v === 'false' || v === 'off' || v === 'none')) { out[k] = false; continue; }
+    if (LIST_KEYS.has(k)) out[k] = v.split(',').map((s) => s.trim()).filter(Boolean);
     else out[k] = v;
   }
   return out;
@@ -71,6 +76,16 @@ export function normalizeConfig(...layers) {
   const c = Object.assign({}, DEFAULTS, ...layers.filter(Boolean));
   const warnings = [];
   const bad = (k, v, d) => { warnings.push(`config.${k}: "${v}" хүчингүй, "${d}" ашиглав`); c[k] = d; };
+
+  // Мөр байх ёстой түлхүүрт мөр бус утга (true, объект) ирвэл анхдагч руу
+  for (const k of STRING_KEYS) {
+    if (c[k] != null && typeof c[k] !== 'string') bad(k, c[k], DEFAULTS[k] ?? null);
+  }
+  if (c.shortcut === true) c.shortcut = DEFAULTS.shortcut;
+  else if (c.shortcut != null && c.shortcut !== false && typeof c.shortcut !== 'string') bad('shortcut', c.shortcut, DEFAULTS.shortcut);
+  if (c.fix === true) c.fix = 'safe';
+  else if (c.fix && typeof c.fix !== 'string') bad('fix', c.fix, 'safe');
+  if (c.storage != null && typeof c.storage !== 'string' && typeof c.storage !== 'boolean') bad('storage', c.storage, 'local');
 
   c.level = String(c.level || 'AA').toUpperCase();
   if (!LEVELS.has(c.level)) bad('level', c.level, 'AA');

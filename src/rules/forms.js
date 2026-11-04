@@ -111,7 +111,7 @@ export default [
       return review(el, m(`Хэрэглэгчийн мэдээллийн талбар бололтой — autocomplete="${guess}" нэмнэ үү.`, `Looks like a personal-data field — add autocomplete="${guess}".`), { guess });
     },
     fix: {
-      tier: 'heuristic',
+      tier: 'heuristic', onReview: true,
       apply(f, ctx) {
         ctx.changes.setAttr(f.node, 'autocomplete', f.data.guess, 'autocomplete-purpose');
         return m(`autocomplete="${f.data.guess}" нэмэв.`, `Added autocomplete="${f.data.guess}".`);
@@ -218,7 +218,7 @@ export default [
       return null;
     },
     fix: {
-      tier: 'safe',
+      tier: 'safe', onReview: true,
       apply(f, ctx) {
         const form = f.node.form;
         const isNew = form && form.querySelectorAll('input[type="password"]').length > 1 || /new|register|signup|бүртгүүлэх|шинэ/i.test(`${f.node.name} ${f.node.id} ${form?.action || ''}`);

@@ -45,28 +45,48 @@ export default [
     sc: ['2.4.7', '2.4.13'],
     impact: 'serious',
     run(ctx) {
-      const out = [];
       // Plugin-ийн фокусын тойм идэвхтэй бол !important-гүй outline:none дүрмийг дарна
       const ringOn = !!ctx.doc.querySelector('style[data-hurteemj-ui="focus-ring"]');
+      const kills = [];
+      const fvBases = new Set(); // :focus-visible дээр тэмдэглэгээ өгсөн сонгогчийн суурь ("button", ".btn", "" = бүх элемент)
+      let anyFvIndicator = false;
+      const hasIndicator = (st) => (st.outlineStyle && st.outlineStyle !== 'none' && st.outlineWidth !== '0px') || (st.boxShadow && st.boxShadow !== 'none') || (st.outline && !/^(none|0|0px)$/.test(st.outline));
+      const baseOf = (s) => s.replace(/:focus-visible|:focus(?!-within)/g, '').replace(/:where\(\s*\)|:is\(\s*\)/g, '').trim().replace(/^\*$/, '');
       for (const sheet of ctx.doc.styleSheets) {
         if (sheet.ownerNode?.hasAttribute?.('data-hurteemj-ui')) continue;
         let rules;
         try { rules = sheet.cssRules; } catch { continue; } // CORS — уншиж чадахгүй
         for (const r of walkRules(rules)) {
           const sel = r.selectorText || '';
-          if (!/:focus(?!-within)/.test(sel)) continue;
+          if (!/:focus/.test(sel)) continue;
           const st = r.style;
+          // Зөвлөмжийн загвар: ":focus:not(:focus-visible) { outline: none }" — хулганы фокусыг л нуусан
+          if (/:not\(\s*:focus-visible\s*\)/.test(sel)) continue;
+          if (/:focus-visible/.test(sel)) {
+            if (hasIndicator(st)) { anyFvIndicator = true; sel.split(',').forEach((s) => fvBases.add(baseOf(s))); }
+            continue;
+          }
+          if (!/:focus(?!-within)/.test(sel)) continue;
           const killed = st.outlineStyle === 'none' || st.outline === 'none' || st.outline === '0' || st.outlineWidth === '0px' || st.outlineWidth === '0' || st.outline === '0px';
           if (!killed) continue;
           if (ringOn && !st.getPropertyPriority('outline') && !st.getPropertyPriority('outline-style') && !st.getPropertyPriority('outline-width')) continue;
-          const replaced = (st.boxShadow && st.boxShadow !== 'none') || st.borderColor || st.borderBottomColor || st.backgroundColor || st.textDecoration || st.textDecorationLine;
-          if (replaced) {
-            out.push(review(ctx.doc.documentElement, m(`"${sel}" дүрэм outline-ыг арилгаад өөр тэмдэглэгээ (сүүдэр/хүрээ) өгсөн. 3:1 тодрол ба 2px зузаантай эсэхийг шалгана уу.`, `"${sel}" removes the outline but adds another indicator. Verify it has 3:1 contrast and 2px thickness.`), { selector: sel }));
-          } else {
-            out.push(fail(ctx.doc.documentElement, m(`CSS дүрэм "${sel}" фокусын тоймыг (outline) орлуулгагүйгээр арилгаж байна.`, `CSS rule "${sel}" removes the focus outline without a replacement.`), { selector: sel }));
-          }
-          if (out.length > 20) return out;
+          kills.push({ sel, st });
         }
+      }
+      const out = [];
+      for (const { sel, st } of kills) {
+        // ":focus { outline: none }" + ижил сонгогч дээрх ":focus-visible { outline: … }" = зөв загвар
+        const bases = sel.split(',').map(baseOf);
+        if (bases.every((b) => fvBases.has(b) || fvBases.has(''))) continue;
+        const replaced = (st.boxShadow && st.boxShadow !== 'none') || st.borderColor || st.borderBottomColor || st.backgroundColor || st.textDecoration || st.textDecorationLine;
+        if (replaced) {
+          out.push(review(ctx.doc.documentElement, m(`"${sel}" дүрэм outline-ыг арилгаад өөр тэмдэглэгээ (сүүдэр/хүрээ) өгсөн. 3:1 тодрол ба 2px зузаантай эсэхийг шалгана уу.`, `"${sel}" removes the outline but adds another indicator. Verify it has 3:1 contrast and 2px thickness.`), { selector: sel }));
+        } else if (anyFvIndicator) {
+          out.push(review(ctx.doc.documentElement, m(`"${sel}" дүрэм outline-ыг арилгасан; сайт :focus-visible тэмдэглэгээ ашигладаг тул энэ элементэд ч хамаарч буй эсэхийг шалгана уу.`, `"${sel}" removes the outline; the site styles :focus-visible elsewhere — verify this element is covered.`), { selector: sel }));
+        } else {
+          out.push(fail(ctx.doc.documentElement, m(`CSS дүрэм "${sel}" фокусын тоймыг (outline) орлуулгагүйгээр арилгаж байна.`, `CSS rule "${sel}" removes the focus outline without a replacement.`), { selector: sel }));
+        }
+        if (out.length > 20) break;
       }
       return out;
     },
@@ -229,6 +249,8 @@ export default [
       const role = getRole(el);
       if (role && INTERACTIVE_ROLES.has(role) && el.hasAttribute('tabindex')) return null;
       const hasHandler = el.hasAttribute('onclick') || (ctx.clickTracked && ctx.clickTracked.has(el));
+      // Event delegation container (React root, jQuery .on('click', sel), карт дотор холбоос) — control биш
+      if (hasHandler && (el.querySelector('a[href], button, input, select, textarea, [role], [tabindex], iframe, summary') || el.children.length > 5 || normalize(el.textContent).length > 120)) return null;
       if (!hasHandler) {
         // cursor:pointer + ролгүй + фокусгүй + текст/icon — дан шинж тул review
         const s = getComputedStyle(el);

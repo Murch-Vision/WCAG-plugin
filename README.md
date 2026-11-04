@@ -23,7 +23,7 @@
 npm install
 npx playwright install chromium   # тестэд (нэг удаа)
 npm run build        # dist/hurteemj.min.js (~50KB gzip), dist/hurteemj.esm.js
-npm test             # 30 тест: unit + regression + Playwright/Chromium + axe-core хөндлөн шалгалт
+npm test             # 40 тест: unit + regression + review + Playwright/Chromium + axe-core хөндлөн шалгалт
 ```
 
 TypeScript тодорхойлолт (`types/index.d.ts`) багцад орсон: `import type { Config, Report } from 'hurteemj'`.
@@ -61,7 +61,7 @@ npx hurteemj-audit https://example.mn --fail-on serious --format html --out repo
 
 Дүрэм бүрийн SC, нөлөөлөл, засварын түвшинг [docs/RULES.md](docs/RULES.md)-ээс харна уу (`npm run docs` кодоос автоматаар үүсгэнэ). Хяналтын явцад засагдсан алдаа, цаашдын сайжруулалтын саналыг [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)-ээс уншина уу.
 
-**Засварын зарчим:** хуудас ачаалахад аль хэдийн байсан мэдэгдлийн хайрцгийг (`.alert`, `.toast`) зөвхөн хянах зүйл гэж үзнэ; JavaScript-ээр шинээр гарч ирсэн мэдэгдэлд л `role="status"` нэмнэ. Нэвтрэх талбарын paste туршилтыг зөвхөн хоосон, фокусгүй талбарт хийнэ. Засвар бүр `data-hj-fixed="rule-id"` тэмдэглэгээтэй.
+**Засварын зарчим:** засвар зөвхөн тодорхой зөрчилд (`fail`) хэрэглэгдэнэ; "хянах" (`review`) олдворт зөвхөн тусгайлан зөвшөөрсөн 7 дүрмийн засвар ажиллана. Хуудас ачаалахад аль хэдийн байсан мэдэгдлийн хайрцгийг (`.alert`, `.toast`) зөвхөн хянах зүйл гэж үзнэ; JavaScript-ээр шинээр гарч ирсэн мэдэгдэлд л `role="status"` нэмнэ. `:focus-visible` ашигладаг сайтад фокусын тойм давхарлахгүй. Нэвтрэх талбарын paste туршилтыг зөвхөн хоосон, фокусгүй талбарт хийнэ. Засвар бүр `data-hj-fixed="rule-id"` тэмдэглэгээтэй.
 
 ## Нарийн тохиргоо
 

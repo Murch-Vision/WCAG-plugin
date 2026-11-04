@@ -69,7 +69,7 @@ async function auditOne(browser, url, o) {
   await page.addInitScript(() => {
     const set = new WeakSet(); window.__hurteemjClickTargets = set;
     const orig = EventTarget.prototype.addEventListener;
-    EventTarget.prototype.addEventListener = function (t, f, op) { if (/^(click|mousedown|pointerdown|touchstart)$/.test(t) && this.nodeType === 1) set.add(this); return orig.call(this, t, f, op); };
+    EventTarget.prototype.addEventListener = function (t, f, op) { if (t === 'click' && this.nodeType === 1) set.add(this); return orig.call(this, t, f, op); };
     window.HurteemjConfig = { auto: false };
   });
   await page.goto(url, { waitUntil: 'load', timeout: 60000 });

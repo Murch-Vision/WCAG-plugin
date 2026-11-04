@@ -622,6 +622,7 @@ var media_default = [
     },
     fix: {
       tier: "safe",
+      onReview: true,
       apply(f, ctx) {
         var _a;
         if ((_a = f.data) == null ? void 0 : _a.decorative) {
@@ -870,13 +871,19 @@ function gradientColors(bgImage) {
   return out;
 }
 function backgroundOf(el) {
+  const doc = el.ownerDocument;
+  const win = doc.defaultView || window;
   const r = el.getBoundingClientRect();
   let stack = null;
   const cx = r.left + Math.min(r.width / 2, 20), cy = r.top + r.height / 2;
-  if (cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight) {
-    stack = document.elementsFromPoint(cx, cy).filter((n) => !isOwnUi(n));
-    const idx = stack.findIndex((n) => n === el || n.contains(el));
-    stack = idx >= 0 ? stack.slice(idx) : null;
+  if (cx >= 0 && cy >= 0 && cx < win.innerWidth && cy < win.innerHeight) {
+    const hit = doc.elementsFromPoint(cx, cy).filter((n) => !isOwnUi(n));
+    const idx = hit.findIndex((n) => n === el || n.contains(el));
+    if (idx >= 0) {
+      const chain = [];
+      if (hit[idx] !== el) for (let n = el; n && n !== hit[idx]; n = n.parentElement) chain.push(n);
+      stack = chain.concat(hit.slice(idx));
+    }
   }
   if (!stack) {
     stack = [];
@@ -981,6 +988,7 @@ var contrast_default = [
       if (!linkText || blockText.length - linkText.length < 10) return null;
       if (/underline|line-through|overline/.test(s.textDecorationLine || s.textDecoration)) return null;
       if (s.borderBottomStyle !== "none" && parseFloat(s.borderBottomWidth) > 0) return null;
+      if (s.boxShadow && s.boxShadow !== "none" || s.backgroundImage && s.backgroundImage !== "none") return null;
       const ps = getComputedStyle(block);
       if (parseInt(s.fontWeight, 10) - parseInt(ps.fontWeight, 10) >= 300 || s.fontStyle !== ps.fontStyle) return null;
       const bg = backgroundOf(el);
@@ -1007,10 +1015,11 @@ var contrast_default = [
     id: "non-text-contrast",
     sc: ["1.4.11"],
     impact: "serious",
-    selector: 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea',
+    selector: 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select, textarea',
     evaluate(el) {
       if (!isVisible(el) || isDisabled(el)) return null;
       const s = getComputedStyle(el);
+      if (s.boxShadow && s.boxShadow !== "none" || s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0) return null;
       const outer = backgroundOf(el.parentElement || el);
       if (outer.unknown || outer.gradient) return null;
       const around = outer.color;
@@ -1130,6 +1139,7 @@ var structure_default = [
     },
     fix: {
       tier: "heuristic",
+      onReview: true,
       apply(f, ctx) {
         const { script, mnHint } = scriptOf(f.node.textContent);
         if (script === "Cyrl" && mnHint) {
@@ -1264,6 +1274,7 @@ var structure_default = [
     },
     fix: {
       tier: "heuristic",
+      onReview: true,
       apply(f, ctx) {
         if (f.outcome !== "review") return false;
         for (const sel of MAIN_CANDIDATES.slice(0, -2)) {
@@ -1298,6 +1309,7 @@ var structure_default = [
     },
     fix: {
       tier: "safe",
+      onReview: true,
       apply(f, ctx) {
         const target = findMainTarget(ctx.doc);
         if (!target) return false;
@@ -1706,10 +1718,7 @@ var NAME_REQUIRED = /* @__PURE__ */ new Set([
   "treegrid",
   "table",
   "form",
-  "region",
-  "menu",
-  "menubar",
-  "toolbar"
+  "region"
 ]);
 var INTERACTIVE_ROLES = /* @__PURE__ */ new Set([
   "button",
@@ -1995,6 +2004,7 @@ var forms_default = [
     },
     fix: {
       tier: "heuristic",
+      onReview: true,
       apply(f, ctx) {
         ctx.changes.setAttr(f.node, "autocomplete", f.data.guess, "autocomplete-purpose");
         return m(`autocomplete="${f.data.guess}" нэмэв.`, `Added autocomplete="${f.data.guess}".`);
@@ -2102,6 +2112,7 @@ var forms_default = [
     },
     fix: {
       tier: "safe",
+      onReview: true,
       apply(f, ctx) {
         const form = f.node.form;
         const isNew = form && form.querySelectorAll('input[type="password"]').length > 1 || /new|register|signup|бүртгүүлэх|шинэ/i.test(`${f.node.name} ${f.node.id} ${(form == null ? void 0 : form.action) || ""}`);
@@ -2206,8 +2217,12 @@ var interaction_default = [
     impact: "serious",
     run(ctx) {
       var _a, _b;
-      const out = [];
       const ringOn = !!ctx.doc.querySelector('style[data-hurteemj-ui="focus-ring"]');
+      const kills = [];
+      const fvBases = /* @__PURE__ */ new Set();
+      let anyFvIndicator = false;
+      const hasIndicator = (st) => st.outlineStyle && st.outlineStyle !== "none" && st.outlineWidth !== "0px" || st.boxShadow && st.boxShadow !== "none" || st.outline && !/^(none|0|0px)$/.test(st.outline);
+      const baseOf = (s) => s.replace(/:focus-visible|:focus(?!-within)/g, "").replace(/:where\(\s*\)|:is\(\s*\)/g, "").trim().replace(/^\*$/, "");
       for (const sheet of ctx.doc.styleSheets) {
         if ((_b = (_a = sheet.ownerNode) == null ? void 0 : _a.hasAttribute) == null ? void 0 : _b.call(_a, "data-hurteemj-ui")) continue;
         let rules2;
@@ -2218,19 +2233,36 @@ var interaction_default = [
         }
         for (const r of walkRules(rules2)) {
           const sel = r.selectorText || "";
-          if (!/:focus(?!-within)/.test(sel)) continue;
+          if (!/:focus/.test(sel)) continue;
           const st = r.style;
+          if (/:not\(\s*:focus-visible\s*\)/.test(sel)) continue;
+          if (/:focus-visible/.test(sel)) {
+            if (hasIndicator(st)) {
+              anyFvIndicator = true;
+              sel.split(",").forEach((s) => fvBases.add(baseOf(s)));
+            }
+            continue;
+          }
+          if (!/:focus(?!-within)/.test(sel)) continue;
           const killed = st.outlineStyle === "none" || st.outline === "none" || st.outline === "0" || st.outlineWidth === "0px" || st.outlineWidth === "0" || st.outline === "0px";
           if (!killed) continue;
           if (ringOn && !st.getPropertyPriority("outline") && !st.getPropertyPriority("outline-style") && !st.getPropertyPriority("outline-width")) continue;
-          const replaced = st.boxShadow && st.boxShadow !== "none" || st.borderColor || st.borderBottomColor || st.backgroundColor || st.textDecoration || st.textDecorationLine;
-          if (replaced) {
-            out.push(review(ctx.doc.documentElement, m(`"${sel}" дүрэм outline-ыг арилгаад өөр тэмдэглэгээ (сүүдэр/хүрээ) өгсөн. 3:1 тодрол ба 2px зузаантай эсэхийг шалгана уу.`, `"${sel}" removes the outline but adds another indicator. Verify it has 3:1 contrast and 2px thickness.`), { selector: sel }));
-          } else {
-            out.push(fail(ctx.doc.documentElement, m(`CSS дүрэм "${sel}" фокусын тоймыг (outline) орлуулгагүйгээр арилгаж байна.`, `CSS rule "${sel}" removes the focus outline without a replacement.`), { selector: sel }));
-          }
-          if (out.length > 20) return out;
+          kills.push({ sel, st });
         }
+      }
+      const out = [];
+      for (const { sel, st } of kills) {
+        const bases = sel.split(",").map(baseOf);
+        if (bases.every((b) => fvBases.has(b) || fvBases.has(""))) continue;
+        const replaced = st.boxShadow && st.boxShadow !== "none" || st.borderColor || st.borderBottomColor || st.backgroundColor || st.textDecoration || st.textDecorationLine;
+        if (replaced) {
+          out.push(review(ctx.doc.documentElement, m(`"${sel}" дүрэм outline-ыг арилгаад өөр тэмдэглэгээ (сүүдэр/хүрээ) өгсөн. 3:1 тодрол ба 2px зузаантай эсэхийг шалгана уу.`, `"${sel}" removes the outline but adds another indicator. Verify it has 3:1 contrast and 2px thickness.`), { selector: sel }));
+        } else if (anyFvIndicator) {
+          out.push(review(ctx.doc.documentElement, m(`"${sel}" дүрэм outline-ыг арилгасан; сайт :focus-visible тэмдэглэгээ ашигладаг тул энэ элементэд ч хамаарч буй эсэхийг шалгана уу.`, `"${sel}" removes the outline; the site styles :focus-visible elsewhere — verify this element is covered.`), { selector: sel }));
+        } else {
+          out.push(fail(ctx.doc.documentElement, m(`CSS дүрэм "${sel}" фокусын тоймыг (outline) орлуулгагүйгээр арилгаж байна.`, `CSS rule "${sel}" removes the focus outline without a replacement.`), { selector: sel }));
+        }
+        if (out.length > 20) break;
       }
       return out;
     },
@@ -2391,6 +2423,7 @@ var interaction_default = [
       const role = getRole(el);
       if (role && INTERACTIVE_ROLES.has(role) && el.hasAttribute("tabindex")) return null;
       const hasHandler = el.hasAttribute("onclick") || ctx.clickTracked && ctx.clickTracked.has(el);
+      if (hasHandler && (el.querySelector("a[href], button, input, select, textarea, [role], [tabindex], iframe, summary") || el.children.length > 5 || normalize(el.textContent).length > 120)) return null;
       if (!hasHandler) {
         const s = getComputedStyle(el);
         if (s.cursor !== "pointer" || !isVisible(el)) return null;
@@ -2505,8 +2538,10 @@ var interaction_default = [
 var nameFold = (s) => normalize(s).toLowerCase().replace(/[^\p{L}\p{N} ]/gu, "").replace(/\s+/g, " ").trim();
 function nearestHeadingText(el) {
   const card = el.closest('article, li, section, .card, [class*="card"], [class*="item"], [class*="post"]');
-  const h = card == null ? void 0 : card.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"]');
-  return h ? normalize(h.textContent) : null;
+  if (!card) return null;
+  const preceding = [...card.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]')].filter((h2) => h2.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+  const h = preceding[preceding.length - 1];
+  return h ? normalize(h.textContent) || null : null;
 }
 var aria_default = [
   {
@@ -2561,6 +2596,7 @@ var aria_default = [
     },
     fix: {
       tier: "heuristic",
+      onReview: true,
       apply(f, ctx) {
         const h = nearestHeadingText(f.node);
         if (!h) return false;
@@ -2727,22 +2763,28 @@ var aria_default = [
     sc: ["4.1.2", "1.3.1"],
     impact: "serious",
     selector: '[aria-hidden="true"]',
-    evaluate(el) {
-      if (el === document.body || el === document.documentElement) {
+    evaluate(el, ctx) {
+      if (el === ctx.doc.body || el === ctx.doc.documentElement) {
         return fail(el, m(`<${el.localName}> дээр aria-hidden="true" — хуудас бүхэлдээ дэлгэц уншигчаас нуугдсан.`, `aria-hidden="true" on <${el.localName}> hides the whole page.`), { whole: true });
       }
       const focusables = [el, ...el.querySelectorAll('a[href], button, input, select, textarea, [tabindex], iframe, summary, [contenteditable="true"]')].filter((n) => isFocusable(n) && isVisible(n) && !n.disabled);
       if (!focusables.length) return null;
+      const modalOpen = !!ctx.doc.querySelector('dialog[open], [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]');
+      if (modalOpen && !el.closest('dialog[open], [aria-modal="true"]')) {
+        return review(focusables[0], m("Modal нээлттэй байхад арын контент aria-hidden болсон; дотор нь фокуслах элемент байна. Modal хаагдахад aria-hidden арилж буйг, эсвэл inert ашиглахыг шалгана уу.", "Background content is aria-hidden while a modal is open and contains focusable elements. Verify aria-hidden is removed on close, or use inert."), { container: el, count: focusables.length, modal: true });
+      }
       return fail(focusables[0], m('aria-hidden="true" дотор фокуслах боломжтой элемент байна — дэлгэц уншигч "хоосон" фокус дээр зогсоно.', 'Focusable element inside aria-hidden="true" — screen readers land on a "ghost" control.'), { container: el, count: focusables.length });
     },
     fix: {
       tier: "heuristic",
       apply(f, ctx) {
-        var _a;
-        if ((_a = f.data) == null ? void 0 : _a.whole) return false;
+        var _a, _b;
+        if (((_a = f.data) == null ? void 0 : _a.whole) || ((_b = f.data) == null ? void 0 : _b.modal)) return false;
         const box = f.data.container;
         const r = box.getBoundingClientRect();
-        if (r.width > 1 && r.height > 1 && getComputedStyle(box).visibility === "visible" && getComputedStyle(box).opacity !== "0") {
+        const w = ctx.win;
+        const onScreen = r.right > 0 && r.bottom > 0 && r.left < w.innerWidth && r.top < w.innerHeight;
+        if (onScreen && r.width > 1 && r.height > 1 && getComputedStyle(box).visibility === "visible" && getComputedStyle(box).opacity !== "0") {
           ctx.changes.removeAttr(box, "aria-hidden", "aria-hidden-focus");
           return m("Харагдаж буй хэсгээс aria-hidden-ыг авав.", "Removed aria-hidden from visible content.");
         }
@@ -3156,6 +3198,7 @@ async function applyFixes(report, { doc, win, config, runtime, changes, pageLang
     if (f.fixed || onlyIds && !onlyIds.includes(f.id)) continue;
     const rule = RULES.find((r) => r.id === f.ruleId);
     if (!(rule == null ? void 0 : rule.fix)) continue;
+    if (f.outcome !== "fail" && !rule.fix.onReview) continue;
     const setting = ruleSetting(config, rule.id);
     const tier = setting.fix === void 0 ? globalTier : setting.fix === true ? "safe" : setting.fix;
     if (!tier || !TIER[tier] || TIER[rule.fix.tier] > TIER[tier]) continue;
@@ -3253,6 +3296,9 @@ var ATTR_MAP = {
   offsetY: "offset-y"
 };
 var LIST_KEYS = /* @__PURE__ */ new Set(["ignore", "languages", "only"]);
+var BOOL_KEYS = /* @__PURE__ */ new Set(["auditor", "widget", "launcher", "observe", "audit", "deep", "console", "respectOS"]);
+var STRING_OR_FALSE = /* @__PURE__ */ new Set(["fix", "storage", "shortcut"]);
+var STRING_KEYS = /* @__PURE__ */ new Set(["lang", "uiLang", "color", "focusColor", "statementUrl", "feedbackUrl", "reportEndpoint", "nonce", "storageKey", "cookieDomain", "shortcutLabel"]);
 var LEVELS = /* @__PURE__ */ new Set(["A", "AA", "AAA"]);
 var FIX_TIERS = /* @__PURE__ */ new Set(["safe", "heuristic"]);
 var POSITIONS = /* @__PURE__ */ new Set(["bottom-right", "bottom-left", "top-right", "top-left"]);
@@ -3263,9 +3309,16 @@ function configFromScript(script) {
   for (const [k, a] of Object.entries(ATTR_MAP)) {
     const v = script.getAttribute(`data-${a}`);
     if (v === null) continue;
-    if (v === "true" || v === "") out[k] = true;
-    else if (v === "false") out[k] = false;
-    else if (LIST_KEYS.has(k)) out[k] = v.split(",").map((s) => s.trim()).filter(Boolean);
+    if (BOOL_KEYS.has(k)) {
+      out[k] = !(v === "false" || v === "0");
+      continue;
+    }
+    if (v === "") continue;
+    if (STRING_OR_FALSE.has(k) && (v === "false" || v === "off" || v === "none")) {
+      out[k] = false;
+      continue;
+    }
+    if (LIST_KEYS.has(k)) out[k] = v.split(",").map((s) => s.trim()).filter(Boolean);
     else out[k] = v;
   }
   return out;
@@ -3278,6 +3331,14 @@ function normalizeConfig(...layers) {
     warnings.push(`config.${k}: "${v}" хүчингүй, "${d}" ашиглав`);
     c[k] = d;
   };
+  for (const k of STRING_KEYS) {
+    if (c[k] != null && typeof c[k] !== "string") bad(k, c[k], DEFAULTS[k] ?? null);
+  }
+  if (c.shortcut === true) c.shortcut = DEFAULTS.shortcut;
+  else if (c.shortcut != null && c.shortcut !== false && typeof c.shortcut !== "string") bad("shortcut", c.shortcut, DEFAULTS.shortcut);
+  if (c.fix === true) c.fix = "safe";
+  else if (c.fix && typeof c.fix !== "string") bad("fix", c.fix, "safe");
+  if (c.storage != null && typeof c.storage !== "string" && typeof c.storage !== "boolean") bad("storage", c.storage, "local");
   c.level = String(c.level || "AA").toUpperCase();
   if (!LEVELS.has(c.level)) bad("level", c.level, "AA");
   if (c.fix === true) c.fix = "safe";
@@ -3583,7 +3644,7 @@ body :is(a[href],button,[role="button"],label,select,summary,[onclick])${NOT_UI}
 body :is(nav,header,footer,[role="navigation"],[role="menu"],[role="toolbar"]) a[href]${NOT_UI}{display:inline-block!important;min-height:44px!important;min-width:44px!important;padding-block:10px!important;box-sizing:border-box!important}
 body input:is([type="checkbox"],[type="radio"])${NOT_UI}{width:24px!important;height:24px!important}`);
   }
-  if (p.hideImages) css2.push(`body :is(img,picture,video,svg[role="img"],[role="img"])${NOT_UI}{opacity:0!important}
+  if (p.hideImages) css2.push(`body :is(img,picture,video,svg[role="img"],[role="img"])${NOT_UI}, body canvas[${HOST_ATTR}="gif"]{opacity:0!important}
 body *${NOT_UI}{background-image:none!important}`);
   return css2.join("\n");
 }
@@ -3654,16 +3715,22 @@ function createPreferences({ doc, win, config, storage, onChange }) {
       el.style.setProperty("font-size", `${(px * s).toFixed(2)}px`, "important");
     }
   }
-  function motion(root = doc) {
-    var _a2;
+  let motionOn = false;
+  function motion(root) {
+    var _a2, _b;
     if (prefs.stopMotion) {
-      root.querySelectorAll("video[autoplay], video").forEach((v) => {
+      const transition = !motionOn;
+      motionOn = true;
+      const scope = root || doc;
+      if (!transition && !root) return;
+      scope.querySelectorAll("video").forEach((v) => {
         if (!v.paused && !v.closest(`[${HOST_ATTR}]`)) {
           v.pause();
           paused.add(v);
         }
       });
-      (_a2 = doc.getAnimations) == null ? void 0 : _a2.call(doc).forEach((a) => {
+      const anims = root ? (_a2 = root.getAnimations) == null ? void 0 : _a2.call(root, { subtree: true }) : (_b = doc.getAnimations) == null ? void 0 : _b.call(doc);
+      anims == null ? void 0 : anims.forEach((a) => {
         try {
           if (a.playState === "running") {
             a.pause();
@@ -3672,8 +3739,8 @@ function createPreferences({ doc, win, config, storage, onChange }) {
         } catch {
         }
       });
-      root.querySelectorAll('img[src*=".gif" i]').forEach((img) => {
-        if (frozen.has(img) || !img.complete || !img.naturalWidth) return;
+      scope.querySelectorAll('img[src*=".gif" i], img[src^="data:image/gif" i]').forEach((img) => {
+        if (frozen.has(img) || !img.complete || !img.naturalWidth || img.closest(`[${HOST_ATTR}]`)) return;
         try {
           const c = doc.createElement("canvas");
           c.width = img.naturalWidth;
@@ -3683,15 +3750,24 @@ function createPreferences({ doc, win, config, storage, onChange }) {
           c.style.cssText = img.style.cssText;
           c.style.width = `${img.width}px`;
           c.style.height = `${img.height}px`;
-          c.setAttribute("role", "img");
-          c.setAttribute("aria-label", img.alt || "");
+          c.setAttribute(HOST_ATTR, "gif");
+          if (img.alt) {
+            c.setAttribute("role", "img");
+            c.setAttribute("aria-label", img.alt);
+          } else {
+            c.setAttribute("role", "presentation");
+            c.setAttribute("aria-hidden", "true");
+          }
           img.insertAdjacentElement("beforebegin", c);
+          const display = { value: img.style.getPropertyValue("display"), priority: img.style.getPropertyPriority("display") };
           img.style.setProperty("display", "none", "important");
-          frozen.set(img, c);
+          frozen.set(img, { c, display });
         } catch {
         }
       });
     } else {
+      if (!motionOn) return;
+      motionOn = false;
       for (const p of paused) {
         try {
           p.play();
@@ -3699,9 +3775,9 @@ function createPreferences({ doc, win, config, storage, onChange }) {
         }
       }
       paused.clear();
-      for (const [img, c] of frozen) {
+      for (const [img, { c, display }] of frozen) {
         c.remove();
-        img.style.removeProperty("display");
+        display.value ? img.style.setProperty("display", display.value, display.priority) : img.style.removeProperty("display");
       }
       frozen.clear();
     }
@@ -3732,12 +3808,14 @@ function createPreferences({ doc, win, config, storage, onChange }) {
   function reset() {
     set({ ...DEFAULT_PREFS });
   }
-  function refresh(root) {
+  function refresh(roots) {
     if (prefs.fontScale !== 1) {
       unscale();
       scaleText();
     }
-    if (prefs.stopMotion) motion(root.querySelectorAll ? root : doc);
+    if (!prefs.stopMotion) return;
+    const list = Array.isArray(roots) ? roots : roots ? [roots] : [];
+    for (const r of list) if (r && r.querySelectorAll && r.isConnected) motion(r);
   }
   function destroy() {
     prefs = { ...DEFAULT_PREFS };
@@ -4228,8 +4306,13 @@ function createWidget({ doc, win, config, prefs, t, getLang, setLang, onAudit, g
     open: () => show(),
     close: hide,
     toggle,
+    // Фокус самбарын гадна байвал (хэрэглэгч хуудсанд бичиж байхад SPA шинэчлэгдэх) фокусыг булаахгүй
     refresh: () => {
-      if (open) rerender(keyOf(shadow.activeElement));
+      if (open) {
+        const k = shadow.activeElement ? keyOf(shadow.activeElement) : null;
+        render();
+        if (k) focusKey(k);
+      }
       updateGuide();
     },
     destroy() {
@@ -4386,7 +4469,7 @@ function translator(getLang, overrides = {}) {
 
 // src/core/listeners.js
 var KEY = "__hurteemjClickTargets";
-var TYPES = /* @__PURE__ */ new Set(["click", "mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend"]);
+var TYPES = /* @__PURE__ */ new Set(["click"]);
 function trackListeners(win = typeof window !== "undefined" ? window : null) {
   if (!win || win[KEY]) return win == null ? void 0 : win[KEY];
   const set = /* @__PURE__ */ new WeakSet();
@@ -4450,6 +4533,7 @@ function init(userConfig = {}) {
   let observer = null;
   async function audit({ deep = config.deep, fix: fix2 = true, scope } = {}) {
     var _a2;
+    if (state.destroyed) return state.report;
     state.busy = true;
     try {
       const rep = runAudit({ doc, win, config, deep, runtime, changes, clickTracked, pageLang: pageLang(), scope });
@@ -4469,7 +4553,9 @@ function init(userConfig = {}) {
     }
   }
   async function fix({ tier = config.fix || "safe", ids } = {}) {
+    if (state.destroyed) return 0;
     if (!state.report) await audit({ fix: false });
+    if (!state.report) return 0;
     state.busy = true;
     try {
       const n = await applyFixes(state.report, { doc, win, config: { ...config, fix: tier }, runtime, changes, pageLang: pageLang(), onlyIds: ids });
@@ -4520,7 +4606,7 @@ function init(userConfig = {}) {
       onPartial: async (roots) => {
         if (state.destroyed) return;
         if (config.audit) for (const r of roots) await audit({ scope: r, deep: false });
-        prefs.refresh();
+        prefs.refresh(roots);
         widget == null ? void 0 : widget.refresh();
       },
       onNavigate: async () => {
