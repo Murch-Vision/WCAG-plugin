@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title></title>
+<style>
+  body { font-family: sans-serif; margin: 0; }
+  .sticky { position: sticky; top: 0; height: 80px; background: #223; color: #fff; z-index: 10; }
+  .sticky a { color: #fff; }
+  a.nofocus:focus { outline: none; }
+  .low { color: #aaa; background: #fff; }
+  .p-link a { color: #333; text-decoration: none; }
+  .tiny { display: inline-block; width: 14px; height: 14px; padding: 0; border: 1px solid #000; }
+  .scrollbox { width: 200px; height: 60px; overflow: auto; }
+  .pointer { cursor: pointer; }
+  .field-ghost { border: 1px solid #eee; background: #fff; }
+  .clip { height: 20px; overflow: hidden; line-height: 20px; width: 200px; }
+</style>
+</head>
+<body>
+<div class="sticky">
+  <nav>
+    <a href="/1">Нүүр</a> <a href="/2">Мэдээ</a> <a href="/3">Үйлчилгээ</a> <a href="/4">Бидний тухай</a> <a href="/5">Холбоо барих</a>
+  </nav>
+</div>
+<div id="content">
+  <h1>Иргэдэд зориулсан үйлчилгээний портал</h1>
+  <h4 id="skip-h">Гарчгийн түвшин үсэрсэн</h4>
+  <h2></h2>
+  <p>Энэ бол Монгол Улсын иргэдэд зориулсан цахим үйлчилгээний туршилтын хуудас бөгөөд хүртээмжийн алдаануудыг агуулна.</p>
+
+  <img id="img-noalt" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" width="50" height="50">
+  <img id="img-filename" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="IMG_2041.jpg" width="50" height="50">
+  <a href="/news" id="img-link"><img id="img-in-link" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" width="20" height="20"> Мэдээ унших</a>
+
+  <p class="low" id="low-contrast">Энэ текстийн тодрол хангалтгүй байна.</p>
+  <p class="p-link" id="p-link">Дэлгэрэнгүй мэдээллийг <a href="/info" id="color-link">манай журам</a> хэсгээс уншиж танилцана уу. Энэ өгүүлбэр урт.</p>
+
+  <button id="btn-empty" class="fa fa-search"></button>
+  <a href="https://facebook.com/example" id="link-empty"><i class="icon-facebook"></i></a>
+  <article><h3>Шинэ хууль батлагдлаа</h3><p>Товч агуулга.</p><a href="/law" id="ambiguous">Дэлгэрэнгүй</a></article>
+
+  <form id="f">
+    <input type="text" id="in-noname">
+    <input type="email" id="in-ph" placeholder="И-мэйл хаяг">
+    <label for="in-req">Нэр *</label><input id="in-req" name="firstname">
+    <input id="in-ac" autocomplete="emale" aria-label="Email">
+    <input type="password" id="pw" autocomplete="off" aria-label="Нууц үг" onpaste="return false">
+    <input id="in-invalid" aria-invalid="true" aria-label="Утас"><span class="error">Утасны дугаар буруу</span>
+    <input class="field-ghost" id="ghost" aria-label="Ghost">
+    <select onchange="location.href=this.value" id="sel-nav" aria-label="Хэл"><option>mn</option></select>
+  </form>
+
+  <div class="tiny-row"><button class="tiny" id="t1" aria-label="a"></button><button class="tiny" id="t2" aria-label="b"></button></div>
+
+  <div class="scrollbox" id="scroll">Lorem ipsum урт текст. Lorem ipsum урт текст. Lorem ipsum урт текст. Lorem ipsum урт текст. Lorem ipsum урт текст. Lorem ipsum урт текст.</div>
+
+  <div onclick="alert(1)" id="div-click">Дарах</div>
+  <span class="pointer" id="pointer-span">Сонгох</span>
+  <span tabindex="3" id="tab-pos">Positive tabindex</span>
+
+  <div role="buton" id="bad-role">x</div>
+  <div role="checkbox" tabindex="0" id="cb-no-state" aria-label="Зөвшөөрөх"></div>
+  <div aria-labeledby="x" id="typo">typo</div>
+  <div aria-hidden="true" id="hidden-focus"><a href="/x">Нууц холбоос</a></div>
+  <button aria-label="Илгээх хүсэлт" id="label-in-name">Хадгалах</button>
+  <a href="/a" id="nested"><button>Inner</button></a>
+  <iframe src="https://www.youtube.com/embed/xyz" id="yt"></iframe>
+  <div class="toast" id="toast">Амжилттай хадгалагдлаа</div>
+  <div role="dialog" id="dlg"><h2>Баталгаажуулах</h2><button>OK</button></div>
+  <ul><div id="bad-list-child">Not li</div><li>ok</li></ul>
+  <li id="orphan-li">Orphan</li>
+  <table id="tbl"><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>
+  <video src="movie.mp4" id="vid" autoplay></video>
+  <p id="eng" lang="english">This is an English paragraph placed inside a Mongolian page.</p>
+  <p class="clip" id="clip" style="line-height: 20px !important">Энэ текст 1.4.12 текстийн зай нэмэхэд тасарна. Энэ текст 1.4.12 текстийн зай нэмэхэд тасарна.</p>
+  <a href="#" class="nofocus" id="nofocus">Фокусгүй холбоос</a>
+  <marquee id="mq">Гүйдэг текст</marquee>
+  <div id="spacer" style="height:1200px"></div>
+  <a href="/bottom" id="bottom">Доод холбоос</a>
+</div>
+</body>
+</html>

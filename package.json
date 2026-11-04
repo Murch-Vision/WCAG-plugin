@@ -1,0 +1,49 @@
+{
+  "name": "hurteemj",
+  "version": "1.0.0",
+  "description": "WCAG 2.2 (ISO/IEC 40500) аудит, аюулгүй засвар, хэрэглэгчийн тохиргооны нэгдсэн plugin. Ямар ч системд нэг мөр кодоор холбогдоно.",
+  "type": "module",
+  "main": "dist/hurteemj.esm.js",
+  "module": "dist/hurteemj.esm.js",
+  "browser": "dist/hurteemj.min.js",
+  "exports": {
+    ".": "./dist/hurteemj.esm.js",
+    "./react": "./integrations/react/index.js",
+    "./vue": "./integrations/vue/index.js",
+    "./element": "./integrations/web-component/index.js",
+    "./criteria": "./src/wcag/criteria.js"
+  },
+  "bin": {
+    "hurteemj-audit": "cli/audit.js"
+  },
+  "files": [
+    "dist",
+    "src",
+    "integrations",
+    "cli"
+  ],
+  "scripts": {
+    "build": "node build.js",
+    "test": "npm run build && node --test test/*.test.js",
+    "audit:url": "node cli/audit.js"
+  },
+  "keywords": [
+    "wcag",
+    "wcag22",
+    "accessibility",
+    "a11y",
+    "хүртээмж",
+    "en301549",
+    "iso40500"
+  ],
+  "license": "MIT",
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "axe-core": "^4.11.0",
+    "esbuild": "^0.28.2"
+  }
+}

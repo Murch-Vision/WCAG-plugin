@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цэвэр туршилтын хуудас — Хүртээмж</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; background: #fff; line-height: 1.5; }
+  header, main, footer { padding: 16px; }
+  nav a { display: inline-block; padding: 12px; color: #0b4bd1; }
+  a { color: #0b4bd1; }
+  button { min-height: 44px; padding: 8px 16px; background: #0b4bd1; color: #fff; border: 0; border-radius: 6px; }
+  input { min-height: 40px; border: 1px solid #6b6b6b; padding: 4px 8px; }
+  label { display: block; margin-top: 12px; }
+  .skip { position: absolute; left: -9999px; } .skip:focus { left: 8px; top: 8px; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Үндсэн агуулга руу шилжих</a>
+<header>
+  <nav aria-label="Үндсэн цэс">
+    <a href="/">Нүүр</a><a href="/news">Мэдээ</a><a href="/services">Үйлчилгээ</a><a href="/about">Бидний тухай</a><a href="/contact">Холбоо барих</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+  <h1>Иргэний цахим үйлчилгээ</h1>
+  <p>Энэ хуудас нь WCAG 2.2 AA шаардлагыг хангах зорилгоор бүтээгдсэн туршилтын хуудас юм. <a href="/rules">Журмын дэлгэрэнгүй</a> хэсгээс уншина уу.</p>
+  <h2>Өргөдөл гаргах</h2>
+  <form>
+    <label for="name">Овог нэр</label>
+    <input id="name" name="name" autocomplete="name" required>
+    <label for="email">И-мэйл</label>
+    <input id="email" type="email" autocomplete="email" required>
+    <label for="pw">Нууц үг</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <p><button type="submit">Илгээх</button></p>
+  </form>
+  <h2>Зураг</h2>
+  <figure>
+    <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="Улаанбаатар хотын төв талбай" width="120" height="80">
+    <figcaption>Сүхбаатарын талбай</figcaption>
+  </figure>
+  <table>
+    <caption>Үйлчилгээний хураамж</caption>
+    <tr><th scope="col">Үйлчилгээ</th><th scope="col">Үнэ</th></tr>
+    <tr><td>Лавлагаа</td><td>5,000₮</td></tr>
+  </table>
+  <div role="status" class="toast">Мэдээлэл хадгалагдлаа</div>
+</main>
+<footer><p>© 2026 Туршилт · <a href="/accessibility">Хүртээмжийн мэдэгдэл</a></p></footer>
+</body>
+</html>
