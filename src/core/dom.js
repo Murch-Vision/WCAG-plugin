@@ -255,29 +255,61 @@ export function visibleText(el) {
   return norm(out);
 }
 
-/** Элементийг давтагдашгүй тодорхойлох CSS selector */
-export function cssPath(el) {
+/**
+ * Нэг аудитын хүрээнд cssPath-ийн nth-of-type тооцоог кэшлэнэ.
+ * Эцэг бүрийн хүүхдүүдийг нэг л удаа тоолно — 1500 article-тай хуудсанд O(n²) → O(n).
+ */
+export function createPathCache() {
+  return { siblings: new WeakMap(), ids: new Map() };
+}
+
+function nthOfType(n, cache) {
+  const parent = n.parentElement;
+  if (!parent) return null;
+  let map = cache?.siblings.get(parent);
+  if (!map) {
+    map = new Map();
+    const counts = {};
+    for (const c of parent.children) counts[c.localName] = (counts[c.localName] || 0) + 1;
+    const seen = {};
+    for (const c of parent.children) {
+      seen[c.localName] = (seen[c.localName] || 0) + 1;
+      map.set(c, counts[c.localName] > 1 ? seen[c.localName] : 0);
+    }
+    cache?.siblings.set(parent, map);
+  }
+  return map.get(n) || 0;
+}
+
+function uniqueId(el, cache) {
+  if (!el.id || !/^[A-Za-z][\w-]*$/.test(el.id)) return null;
+  const root = el.getRootNode();
+  const key = el.id;
+  let count = cache?.ids.get(key);
+  if (count === undefined) {
+    count = root.querySelectorAll(`#${CSS.escape(key)}`).length;
+    cache?.ids.set(key, count);
+  }
+  return count === 1 ? `#${key}` : null;
+}
+
+/** Элементийг давтагдашгүй тодорхойлох CSS selector. `cache` = createPathCache() (сонголттой) */
+export function cssPath(el, cache) {
   if (!el || el.nodeType !== 1) return '';
   if (el === el.ownerDocument.documentElement) return 'html';
   if (el === el.ownerDocument.body) return 'body';
-  if (el.id && /^[A-Za-z][\w-]*$/.test(el.id)) {
-    const root = el.getRootNode();
-    if (root.querySelectorAll(`#${el.id}`).length === 1) return `#${el.id}`;
-  }
+  const own = uniqueId(el, cache);
+  if (own) return own;
   const parts = [];
   for (let n = el; n && n.nodeType === 1 && n.localName !== 'html'; n = n.parentElement) {
-    let part = n.localName;
-    if (n.id && /^[A-Za-z][\w-]*$/.test(n.id)) { parts.unshift(`#${n.id}`); break; }
-    const parent = n.parentElement;
-    if (parent) {
-      const same = Array.from(parent.children).filter((c) => c.localName === n.localName);
-      if (same.length > 1) part += `:nth-of-type(${same.indexOf(n) + 1})`;
-    }
-    parts.unshift(part);
+    const id = uniqueId(n, cache);
+    if (id) { parts.unshift(id); break; }
+    const nth = nthOfType(n, cache);
+    parts.unshift(nth ? `${n.localName}:nth-of-type(${nth})` : n.localName);
   }
   const host = el.getRootNode()?.host;
   const sel = parts.join(' > ');
-  return host ? `${cssPath(host)} >>> ${sel}` : sel;
+  return host ? `${cssPath(host, cache)} >>> ${sel}` : sel;
 }
 
 export function snippet(el, max = 160) {

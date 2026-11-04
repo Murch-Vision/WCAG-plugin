@@ -28,12 +28,16 @@ function parseArgs(argv) {
     else if (a === '--viewport') o.viewport = next();
     else if (a === '--no-deep') o.deep = false;
     else if (a === '--lang') o.lang = next();
-    else if (a === '--fix') o.fix = next() || 'safe';
+    else if (a === '--fix') o.fix = /^(safe|heuristic)$/.test(argv[i + 1] || '') ? argv[++i] : 'safe';
     else if (a === '--wait') o.wait = +next();
     else if (a === '--ignore') o.ignore = next().split(',');
     else if (a === '-h' || a === '--help') o.help = true;
+    else if (a.startsWith('--')) { console.error(`Танигдахгүй сонголт: ${a}`); o.help = true; o.badArg = true; }
     else o.urls.push(a);
   }
+  if (!['A', 'AA', 'AAA'].includes(o.level)) { console.error(`--level нь A|AA|AAA байх ёстой (${o.level})`); o.badArg = true; }
+  if (!['critical', 'serious', 'moderate', 'minor', 'none'].includes(o.failOn)) { console.error(`--fail-on утга буруу (${o.failOn})`); o.badArg = true; }
+  if (!/^\d+x\d+$/.test(o.viewport)) { console.error(`--viewport нь 1280x800 хэлбэртэй байна (${o.viewport})`); o.badArg = true; }
   return o;
 }
 
@@ -118,7 +122,7 @@ ${r.findings.map((f) => `<tr><td>${f.fixed ? 'fixable' : f.outcome}</td><td>${f.
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
-  if (o.help || !o.urls.length) { console.log(HELP); process.exit(o.help ? 0 : 2); }
+  if (o.help || o.badArg || !o.urls.length) { console.log(HELP); process.exit(o.help && !o.badArg ? 0 : 2); }
   if (!existsSync(BUNDLE)) { console.error('dist/hurteemj.js алга — эхлээд `npm run build`'); process.exit(2); }
   let chromium;
   try { ({ chromium } = require('playwright')); } catch { console.error('playwright суулгана уу: npm i -D playwright'); process.exit(2); }
@@ -134,7 +138,8 @@ async function main() {
   const text = fmt();
   if (o.out) { writeFileSync(o.out, text); console.log(`→ ${o.out}`); } else console.log(text);
   const threshold = RANK[o.failOn];
-  const bad = o.failOn === 'none' ? 0 : reports.flatMap((r) => r.findings).filter((f) => f.outcome === 'fail' && RANK[f.impact] <= threshold).length;
+  // --fix өгсөн бол plugin-ийн засаж чадах олдворыг босгонд тооцохгүй (үлдсэн зөрчил л CI-г унагана)
+  const bad = o.failOn === 'none' ? 0 : reports.flatMap((r) => r.findings).filter((f) => f.outcome === 'fail' && !f.fixed && RANK[f.impact] <= threshold).length;
   if (o.out || o.format !== 'text') console.error(`hurteemj: ${bad} finding(s) at or above "${o.failOn}"`);
   process.exit(bad ? 1 : 0);
 }

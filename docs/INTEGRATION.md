@@ -27,6 +27,10 @@
 | `data-storage` | `local` / `cookie` / `false` | `local` |
 | `data-deep` | 1.4.12 текстийн зайн бодит туршилт | `false` |
 | `data-nonce` | CSP nonce (`<script nonce>`-оос автоматаар авна) | — |
+| `data-report-sample-rate` | Тайлан илгээх магадлал 0–1 | `1` |
+| `data-offset-x`, `data-offset-y` | Launcher-ийн зай (px) | `16` |
+
+Буруу утга (жишээ нь `data-level="B"`) plugin-ийг унагахгүй: анхдагч руу буцаж `console.warn` хийгдэнэ, `api.config.warnings`-д жагсаана.
 | `data-track-listeners` | `addEventListener('click')`-ийг ажиглах (2.1.1) | — |
 | `data-auto` | `false` — автоматаар эхлүүлэхгүй | `true` |
 
@@ -144,7 +148,9 @@ Exit code: `0` — босгоос дээш зөрчилгүй, `1` — зөрч�
 
 ## 10. Тайлан хүлээн авах (мониторинг)
 
-`data-report-endpoint="https://api.example.mn/a11y-report"` тохируулбал хуудас ачаалагдах бүрт (эсвэл `reportSampleRate: 0.1` — 10%) JSON тайланг `sendBeacon`-оор илгээнэ. Тайланд DOM node, оруулсан утга (`value`) ордоггүй. Жишээ хүлээн авагч: `examples/report-server.js`.
+`data-report-endpoint="https://api.example.mn/a11y-report"` тохируулбал хуудас ачаалагдах бүрт болон SPA навигаци бүрт (эсвэл `reportSampleRate: 0.1` — 10%) JSON тайланг `sendBeacon`-оор илгээнэ. Жишээ хүлээн авагч: `examples/report-server.js`.
+
+**Хувийн мэдээлэл:** тайланд DOM node болон оролтын `value` ордоггүй, гэхдээ элементийн нээлтийн tag (`html`), selector, мессеж доторх alt/холбоосын текст зэрэг **хуудасны контентын хэсэг** ордог. Нэвтэрсэн хэрэглэгчийн хуудаснаас тайлан авахдаа `onReport` hook-оор шүүх эсвэл `reportSampleRate`-ийг багасгахыг зөвлөж байна.
 
 ## 11. Үйл явдлууд (events)
 

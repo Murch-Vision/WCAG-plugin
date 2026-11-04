@@ -1,6 +1,7 @@
 import { accessibleName, isHiddenFromAT, isVisible, normalize, qsa } from '../core/dom.js';
 import { AUTOCOMPLETE_TOKENS, AUTOCOMPLETE_MODIFIERS } from '../wcag/aria.js';
 import { m, fail, review } from './util.js';
+import { ChangeLog } from '../fix/changes.js';
 
 const FIELD_SEL = 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]), select, textarea, [role="textbox"], [role="combobox"], [role="searchbox"], [role="spinbutton"], [role="slider"], [role="checkbox"]:not(input), [role="radio"]:not(input), [role="switch"]';
 
@@ -168,11 +169,14 @@ export default [
     sc: ['3.3.8'],
     impact: 'critical',
     selector: 'input[type="password"], input[autocomplete="one-time-code"], input[autocomplete~="username"], input[name*="otp" i], input[name*="code" i][inputmode="numeric"]',
-    evaluate(el) {
+    evaluate(el, ctx) {
       if (!isVisible(el)) return null;
-      // Бодит туршилт: цуцлах боломжтой paste эвент илгээж, сайтын код preventDefault хийж байгаа эсэхийг шалгана
+      // Аль хэдийн засагдсан талбарт давхар шалгахгүй (хамгаалалт ажиллаж байгаа тул probe дахиад "blocked" гэж харагдана)
+      if (ChangeLog.isFixedBy(el, 'accessible-auth-paste')) return null;
       let blocked = /return\s+false|preventDefault/.test(el.getAttribute('onpaste') || '');
-      if (!blocked) {
+      // Бодит туршилт: цуцлах боломжтой paste эвент илгээж, сайтын код preventDefault хийж байгаа эсэхийг шалгана.
+      // Зөвхөн хоосон, фокусгүй талбарт — сайтын handler хэрэглэгчийн оруулсан утгыг өөрчилж болзошгүй.
+      if (!blocked && !el.value && ctx.doc.activeElement !== el) {
         try {
           const ev = new Event('paste', { bubbles: true, cancelable: true });
           Object.defineProperty(ev, 'clipboardData', { value: { getData: () => '', types: [] } });
@@ -194,6 +198,7 @@ export default [
         // Capture шатанд сайтын paste handler-ыг ажиллуулахгүй болгоно (зөвхөн энэ талбарт)
         const guard = (e) => { if (e.target === el && !e.__hjProbe) e.stopImmediatePropagation(); };
         ctx.changes.listen(ctx.win, 'paste', guard, true, 'accessible-auth-paste');
+        ctx.changes.mark(el, 'accessible-auth-paste');
         return m('Нэвтрэх талбарын paste хоригийг цуцлав.', 'Unblocked paste in the authentication field.');
       },
     },

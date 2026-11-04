@@ -20,6 +20,7 @@
     criteriaForLevel: () => criteriaForLevel,
     default: () => index_default,
     init: () => init,
+    normalizeConfig: () => normalizeConfig,
     rules: () => rules,
     serialize: () => serialize,
     trackListeners: () => trackListeners
@@ -327,32 +328,57 @@
     walk(el);
     return norm(out);
   }
-  function cssPath(el) {
+  function createPathCache() {
+    return { siblings: /* @__PURE__ */ new WeakMap(), ids: /* @__PURE__ */ new Map() };
+  }
+  function nthOfType(n, cache) {
+    const parent = n.parentElement;
+    if (!parent) return null;
+    let map = cache == null ? void 0 : cache.siblings.get(parent);
+    if (!map) {
+      map = /* @__PURE__ */ new Map();
+      const counts = {};
+      for (const c of parent.children) counts[c.localName] = (counts[c.localName] || 0) + 1;
+      const seen = {};
+      for (const c of parent.children) {
+        seen[c.localName] = (seen[c.localName] || 0) + 1;
+        map.set(c, counts[c.localName] > 1 ? seen[c.localName] : 0);
+      }
+      cache == null ? void 0 : cache.siblings.set(parent, map);
+    }
+    return map.get(n) || 0;
+  }
+  function uniqueId(el, cache) {
+    if (!el.id || !/^[A-Za-z][\w-]*$/.test(el.id)) return null;
+    const root = el.getRootNode();
+    const key = el.id;
+    let count = cache == null ? void 0 : cache.ids.get(key);
+    if (count === void 0) {
+      count = root.querySelectorAll(`#${CSS.escape(key)}`).length;
+      cache == null ? void 0 : cache.ids.set(key, count);
+    }
+    return count === 1 ? `#${key}` : null;
+  }
+  function cssPath(el, cache) {
     var _a3;
     if (!el || el.nodeType !== 1) return "";
     if (el === el.ownerDocument.documentElement) return "html";
     if (el === el.ownerDocument.body) return "body";
-    if (el.id && /^[A-Za-z][\w-]*$/.test(el.id)) {
-      const root = el.getRootNode();
-      if (root.querySelectorAll(`#${el.id}`).length === 1) return `#${el.id}`;
-    }
+    const own = uniqueId(el, cache);
+    if (own) return own;
     const parts = [];
     for (let n = el; n && n.nodeType === 1 && n.localName !== "html"; n = n.parentElement) {
-      let part = n.localName;
-      if (n.id && /^[A-Za-z][\w-]*$/.test(n.id)) {
-        parts.unshift(`#${n.id}`);
+      const id = uniqueId(n, cache);
+      if (id) {
+        parts.unshift(id);
         break;
       }
-      const parent = n.parentElement;
-      if (parent) {
-        const same = Array.from(parent.children).filter((c) => c.localName === n.localName);
-        if (same.length > 1) part += `:nth-of-type(${same.indexOf(n) + 1})`;
-      }
-      parts.unshift(part);
+      const nth = nthOfType(n, cache);
+      parts.unshift(nth ? `${n.localName}:nth-of-type(${nth})` : n.localName);
     }
     const host = (_a3 = el.getRootNode()) == null ? void 0 : _a3.host;
     const sel = parts.join(" > ");
-    return host ? `${cssPath(host)} >>> ${sel}` : sel;
+    return host ? `${cssPath(host, cache)} >>> ${sel}` : sel;
   }
   function snippet(el, max = 160) {
     const html = el.outerHTML || "";
@@ -1790,6 +1816,105 @@
   ]);
   var AUTOCOMPLETE_MODIFIERS = /* @__PURE__ */ new Set(["home", "work", "mobile", "fax", "pager", "shipping", "billing"]);
 
+  // src/fix/changes.js
+  var ChangeLog = class _ChangeLog {
+    constructor() {
+      this.items = [];
+    }
+    setAttr(el, name, value, ruleId) {
+      const had = el.hasAttribute(name);
+      const prev = el.getAttribute(name);
+      if (had && prev === String(value)) return;
+      this.items.push({ type: "attr", el, name, had, prev, ruleId });
+      el.setAttribute(name, value);
+      this._mark(el, ruleId);
+    }
+    removeAttr(el, name, ruleId) {
+      if (!el.hasAttribute(name)) return;
+      this.items.push({ type: "attr", el, name, had: true, prev: el.getAttribute(name), ruleId });
+      el.removeAttribute(name);
+      this._mark(el, ruleId);
+    }
+    setStyle(el, prop, value, ruleId, priority = "important") {
+      this.items.push({ type: "style", el, prop, prev: el.style.getPropertyValue(prop), prevPriority: el.style.getPropertyPriority(prop), hadAttr: el.hasAttribute("style"), ruleId });
+      el.style.setProperty(prop, value, priority);
+      this._mark(el, ruleId);
+    }
+    insert(node, parent, before = null, ruleId) {
+      parent.insertBefore(node, before);
+      this.items.push({ type: "node", node, ruleId });
+    }
+    listen(target, type, fn, opts, ruleId) {
+      target.addEventListener(type, fn, opts);
+      this.items.push({ type: "listener", target, evt: type, fn, opts, ruleId });
+    }
+    custom(undo, ruleId) {
+      this.items.push({ type: "custom", undo, ruleId });
+    }
+    /** Атрибут өөрчлөөгүй засварт (listener г.м.) элементийг "засагдсан" гэж тэмдэглэнэ — дахин аудитад давхар засахгүй */
+    mark(el, ruleId) {
+      this._mark(el, ruleId);
+    }
+    _mark(el, ruleId) {
+      if (!ruleId || !el.setAttribute) return;
+      const cur = (el.getAttribute("data-hj-fixed") || "").split(" ").filter(Boolean);
+      if (!cur.includes(ruleId)) {
+        cur.push(ruleId);
+        el.setAttribute("data-hj-fixed", cur.join(" "));
+        this.items.push({ type: "mark", el, ruleId });
+      }
+    }
+    static _unmark(el, ruleId) {
+      const rest = (el.getAttribute("data-hj-fixed") || "").split(" ").filter((r) => r && r !== ruleId);
+      if (rest.length) el.setAttribute("data-hj-fixed", rest.join(" "));
+      else el.removeAttribute("data-hj-fixed");
+    }
+    /** ruleId өгвөл зөвхөн тэр дүрмийн өөрчлөлтийг буцаана */
+    revert(ruleId) {
+      const keep = [];
+      for (let i = this.items.length - 1; i >= 0; i--) {
+        const c = this.items[i];
+        if (ruleId && c.ruleId !== ruleId) {
+          keep.unshift(c);
+          continue;
+        }
+        try {
+          if (c.type === "attr") c.had ? c.el.setAttribute(c.name, c.prev) : c.el.removeAttribute(c.name);
+          else if (c.type === "style") {
+            c.prev ? c.el.style.setProperty(c.prop, c.prev, c.prevPriority) : c.el.style.removeProperty(c.prop);
+            if (!c.hadAttr && !c.el.getAttribute("style")) c.el.removeAttribute("style");
+          } else if (c.type === "node") c.node.remove();
+          else if (c.type === "listener") c.target.removeEventListener(c.evt, c.fn, c.opts);
+          else if (c.type === "custom") c.undo();
+          else if (c.type === "mark") ruleId ? _ChangeLog._unmark(c.el, ruleId) : c.el.removeAttribute("data-hj-fixed");
+        } catch {
+        }
+      }
+      this.items = keep;
+    }
+    /** Тухайн элементэд энэ дүрмийн засвар хэрэглэгдсэн эсэх (дахин аудитад давхар засахгүй) */
+    static isFixedBy(el, ruleId) {
+      var _a3;
+      return (((_a3 = el == null ? void 0 : el.getAttribute) == null ? void 0 : _a3.call(el, "data-hj-fixed")) || "").split(" ").includes(ruleId);
+    }
+    /** Тайланд зориулсан, DOM node агуулаагүй хураангуй */
+    summary() {
+      return this.items.filter((c) => c.type !== "mark").map((c) => {
+        var _a3;
+        return {
+          type: c.type,
+          ruleId: c.ruleId,
+          attr: c.name || c.prop || c.evt,
+          prev: c.prev,
+          tag: ((_a3 = c.el || c.node || c.target) == null ? void 0 : _a3.localName) || null
+        };
+      });
+    }
+    get count() {
+      return this.items.filter((c) => c.type !== "mark").length;
+    }
+  };
+
   // src/rules/forms.js
   var FIELD_SEL = 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]), select, textarea, [role="textbox"], [role="combobox"], [role="searchbox"], [role="spinbutton"], [role="slider"], [role="checkbox"]:not(input), [role="radio"]:not(input), [role="switch"]';
   function nearbyLabelText(el) {
@@ -1953,10 +2078,11 @@
       sc: ["3.3.8"],
       impact: "critical",
       selector: 'input[type="password"], input[autocomplete="one-time-code"], input[autocomplete~="username"], input[name*="otp" i], input[name*="code" i][inputmode="numeric"]',
-      evaluate(el) {
+      evaluate(el, ctx) {
         if (!isVisible(el)) return null;
+        if (ChangeLog.isFixedBy(el, "accessible-auth-paste")) return null;
         let blocked = /return\s+false|preventDefault/.test(el.getAttribute("onpaste") || "");
-        if (!blocked) {
+        if (!blocked && !el.value && ctx.doc.activeElement !== el) {
           try {
             const ev = new Event("paste", { bubbles: true, cancelable: true });
             Object.defineProperty(ev, "clipboardData", { value: { getData: () => "", types: [] } });
@@ -1980,6 +2106,7 @@
             if (e.target === el && !e.__hjProbe) e.stopImmediatePropagation();
           };
           ctx.changes.listen(ctx.win, "paste", guard, true, "accessible-auth-paste");
+          ctx.changes.mark(el, "accessible-auth-paste");
           return m("Нэвтрэх талбарын paste хоригийг цуцлав.", "Unblocked paste in the authentication field.");
         }
       }
@@ -2179,8 +2306,22 @@
         const aaa = ctx.level === "AAA";
         const min = aaa ? 44 : 24;
         const targets = qsa(ctx.scope, TARGET_SEL).filter((el) => !ctx.ignored(el) && isVisible(el) && !isHiddenFromAT(el) && !el.disabled).map((el) => ({ el, r: el.getBoundingClientRect() })).filter(({ r }) => r.width > 0 && r.height > 0);
-        const uniq = targets.filter((t) => !targets.some((o) => o !== t && o.el.contains(t.el) && o.el.matches("a[href], button")));
+        const uniq = targets.filter((t) => {
+          var _a4;
+          return !((_a4 = t.el.parentElement) == null ? void 0 : _a4.closest("a[href], button"));
+        });
         const small = uniq.filter(({ el, r }) => (r.width < min - 0.5 || r.height < min - 0.5) && !isInlineInText(el));
+        if (!small.length) return [];
+        const CELL = 48;
+        const grid = /* @__PURE__ */ new Map();
+        const cellsOf = (r, pad) => {
+          const out2 = [];
+          for (let x = Math.floor((r.left - pad) / CELL); x <= Math.floor((r.right + pad) / CELL); x++) {
+            for (let y = Math.floor((r.top - pad) / CELL); y <= Math.floor((r.bottom + pad) / CELL); y++) out2.push(`${x},${y}`);
+          }
+          return out2;
+        };
+        for (const t of uniq) for (const c of cellsOf(t.r, 24)) (grid.get(c) || grid.set(c, []).get(c)).push(t);
         const out = [];
         for (const t of small) {
           const { el, r } = t;
@@ -2193,7 +2334,8 @@
             continue;
           }
           const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-          const conflict = uniq.find((o) => {
+          const candidates = grid.get(`${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`) || [];
+          const conflict = candidates.find((o) => {
             if (o === t || o.el.contains(el) || el.contains(o.el)) return false;
             const ox = o.r.left + o.r.width / 2, oy = o.r.top + o.r.height / 2;
             const oSmall = o.r.width < 24 || o.r.height < 24;
@@ -2703,13 +2845,17 @@
       sc: ["4.1.3"],
       impact: "serious",
       selector: '.toast, .snackbar, .notification, .alert, .flash, .notice, [class*="toast"], [class*="snackbar"], [class*="alert-"], .message.success, .message.error, .invalid-feedback, .form-error, [class*="flash-"]',
-      evaluate(el) {
+      evaluate(el, ctx) {
         if (!isVisible(el) || !normalize(el.textContent)) return null;
         if (el.closest('[role="status"], [role="alert"], [role="log"], [aria-live], output, [role="alertdialog"]')) return null;
+        const dynamic = !!ctx.partial;
         if (el.matches("a, button") || el.querySelector("a[href], button, input")) {
           return review(el, m('Мэдэгдлийн элемент бололтой. Динамикаар гарч ирдэг бол role="status"/"alert" эсвэл aria-live хэрэгтэй.', 'Looks like a notification. If it appears dynamically it needs role="status"/"alert" or aria-live.'));
         }
         const isError = /(error|danger|fail|invalid|алдаа)/i.test(el.className + el.textContent.slice(0, 40));
+        if (!dynamic) {
+          return review(el, m('Мэдэгдлийн загвартай элемент. Хэрэв JavaScript-ээр динамикаар гарч ирдэг бол role="status"/"alert" шаардлагатай.', 'Notification-styled element. If it is injected dynamically by script it needs role="status"/"alert".'), { isError, static: true });
+        }
         return fail(el, m('Төлөвийн мессеж дэлгэц уншигчид зарлагдахгүй (role="status" / role="alert" / aria-live алга).', 'Status message is not announced to screen readers (no role="status"/"alert"/aria-live).'), { isError });
       },
       fix: {
@@ -2864,7 +3010,7 @@
       return ruleSetting(config, r.id).enabled;
     });
   }
-  function normalizeResult(rule, res, config) {
+  function normalizeResult(rule, res, config, pathCache) {
     var _a3, _b;
     const sc = ((_a3 = res.data) == null ? void 0 : _a3.sc) || rule.sc;
     const inLevel = sc.filter((id) => CRITERIA_BY_ID[id] && levelIncludes(config.level, CRITERIA_BY_ID[id].level));
@@ -2880,7 +3026,7 @@
       message: res.message,
       data: res.data,
       node: res.node,
-      selector: res.node ? cssPath(res.node) : null,
+      selector: res.node ? cssPath(res.node, pathCache) : null,
       html: ((_b = res.node) == null ? void 0 : _b.outerHTML) ? snippet(res.node) : null,
       fixed: false,
       fix: null
@@ -2899,14 +3045,19 @@
       runtime,
       changes,
       clickTracked,
-      pageLang: pageLang || (doc.documentElement.lang || config.lang || "mn").split("-")[0],
-      ignored: (el) => isIgnored(el, config.ignore)
+      pageLang: pageLang || (doc.documentElement.lang || config.lang || "en").split("-")[0].toLowerCase(),
+      ignored: (el) => isIgnored(el, config.ignore),
+      partial
     };
     const findings = [];
     const errors = [];
+    const timings = {};
+    const pathCache = createPathCache();
+    const now = () => (win.performance || Date).now();
     for (const rule of activeRules(config)) {
       if (rule.deep && !deep) continue;
       if (partial && rule.run && !rule.scoped) continue;
+      const tr = now();
       try {
         let results = [];
         if (rule.run) {
@@ -2923,17 +3074,18 @@
         }
         for (const res of results) {
           if (res.node && ctx.ignored(res.node)) continue;
-          const f = normalizeResult(rule, res, config);
+          const f = normalizeResult(rule, res, config, pathCache);
           if (f) findings.push(f);
         }
       } catch (e) {
         errors.push({ ruleId: rule.id, error: String(e && e.message || e) });
       }
+      timings[rule.id] = Math.round((now() - tr) * 10) / 10;
     }
     findings.sort((a, b) => (a.outcome === b.outcome ? 0 : a.outcome === "fail" ? -1 : 1) || IMPACT_ORDER[a.impact] - IMPACT_ORDER[b.impact]);
-    return buildReport({ doc, win, config, findings, errors, partial, duration: (win.performance || Date).now() - t0 });
+    return buildReport({ doc, win, config, findings, errors, partial, duration: now() - t0, timings });
   }
-  function buildReport({ doc, win, config, findings, errors = [], partial = false, duration = 0 }) {
+  function buildReport({ doc, win, config, findings, errors = [], partial = false, duration = 0, timings }) {
     var _a3;
     const bySC = {};
     for (const f of findings) for (const sc of f.sc) (bySC[sc] || (bySC[sc] = { fail: 0, review: 0, fixed: 0 }))[f.outcome]++;
@@ -2950,6 +3102,7 @@
     });
     const count = (o) => findings.filter((f) => f.outcome === o).length;
     const report = {
+      /** Хэвлэх үед хэрэглэгчийн баталгаажуулалт: Node агуулаагүй */
       tool: { name: "hurteemj", version: "1.0.0" },
       standard: "WCAG 2.2 (ISO/IEC 40500)",
       level: config.level,
@@ -2958,10 +3111,14 @@
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
       partial,
       durationMs: Math.round(duration),
+      /** Дүрэм бүрийн хугацаа (ms) — гүйцэтгэлийн оношилгоонд */
+      timings: timings || null,
       summary: {
         fail: count("fail"),
         review: count("review"),
         fixed: findings.filter((f) => f.fixed).length,
+        /** Засагдаагүй үлдсэн зөрчил */
+        remaining: findings.filter((f) => f.outcome === "fail" && !f.fixed).length,
         byImpact: Object.fromEntries(["critical", "serious", "moderate", "minor"].map((i) => [i, findings.filter((f) => f.impact === i && f.outcome === "fail" && !f.fixed).length])),
         criteria: {
           total: criteria2.length,
@@ -2982,16 +3139,43 @@
     Object.defineProperty(report, "toJSON", { enumerable: false, value: () => serialize(report) });
     return report;
   }
+  var isNode = (v) => !!v && typeof v === "object" && typeof v.nodeType === "number";
+  function cleanData(data) {
+    if (!data || typeof data !== "object") return data;
+    const out = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (isNode(v) || typeof v === "function") continue;
+      out[k] = Array.isArray(v) ? v.filter((x) => !isNode(x)) : v;
+    }
+    return out;
+  }
   function serialize(report, lang) {
-    const pick = (msg) => lang ? msg == null ? void 0 : msg[lang] : msg;
+    const pick = (msg) => lang ? (msg == null ? void 0 : msg[lang]) ?? (msg == null ? void 0 : msg.en) : msg;
     return {
       ...report,
-      findings: report.findings.map(({ node, message, fix, ...f }) => ({ ...f, message: pick(message), fix: fix ? pick(fix) : null }))
+      findings: report.findings.map(({ node, message, fix, data, ...f }) => ({ ...f, data: cleanData(data), message: pick(message), fix: fix ? pick(fix) : null }))
     };
+  }
+  function mergeFindings(previous, next) {
+    const alive = previous.filter((f) => !f.node || f.node.isConnected);
+    const key = (f) => `${f.ruleId}|${f.selector || ""}`;
+    const seen = new Set(alive.map(key));
+    const byKey = new Map(alive.map((f) => [key(f), f]));
+    for (const f of next) {
+      const k = key(f);
+      if (!seen.has(k)) {
+        alive.push(f);
+        seen.add(k);
+        continue;
+      }
+      const old = byKey.get(k);
+      if (old && (f.fixed || old.outcome !== f.outcome)) alive[alive.indexOf(old)] = f;
+    }
+    return alive;
   }
   async function applyFixes(report, { doc, win, config, runtime, changes, pageLang, onlyIds }) {
     const globalTier = config.fix === true ? "safe" : config.fix;
-    const ctxBase = { doc, win, config, level: config.level, runtime, changes, pageLang: pageLang || (doc.documentElement.lang || "mn").split("-")[0] };
+    const ctxBase = { doc, win, config, level: config.level, runtime, changes, pageLang: pageLang || (doc.documentElement.lang || config.lang || "en").split("-")[0].toLowerCase() };
     const onceDone = /* @__PURE__ */ new Map();
     let fixed = 0;
     for (const f of report.findings) {
@@ -3021,6 +3205,7 @@
       }
     }
     report.summary.fixed = report.findings.filter((x) => x.fixed).length;
+    report.summary.remaining = report.findings.filter((x) => x.outcome === "fail" && !x.fixed).length;
     for (const k of Object.keys(report.summary.byImpact)) {
       report.summary.byImpact[k] = report.findings.filter((x) => x.impact === k && x.outcome === "fail" && !x.fixed).length;
     }
@@ -3032,81 +3217,197 @@
     return fmt(((_a3 = f.message) == null ? void 0 : _a3[lang]) || ((_b = f.message) == null ? void 0 : _b.en) || "", f.data || {});
   }
 
-  // src/fix/changes.js
-  var ChangeLog = class {
-    constructor() {
-      this.items = [];
-    }
-    setAttr(el, name, value, ruleId) {
-      const had = el.hasAttribute(name);
-      const prev = el.getAttribute(name);
-      if (had && prev === String(value)) return;
-      this.items.push({ type: "attr", el, name, had, prev, ruleId });
-      el.setAttribute(name, value);
-      this._mark(el, ruleId);
-    }
-    removeAttr(el, name, ruleId) {
-      if (!el.hasAttribute(name)) return;
-      this.items.push({ type: "attr", el, name, had: true, prev: el.getAttribute(name), ruleId });
-      el.removeAttribute(name);
-      this._mark(el, ruleId);
-    }
-    setStyle(el, prop, value, ruleId, priority = "important") {
-      this.items.push({ type: "style", el, prop, prev: el.style.getPropertyValue(prop), prevPriority: el.style.getPropertyPriority(prop), hadAttr: el.hasAttribute("style"), ruleId });
-      el.style.setProperty(prop, value, priority);
-      this._mark(el, ruleId);
-    }
-    insert(node, parent, before = null, ruleId) {
-      parent.insertBefore(node, before);
-      this.items.push({ type: "node", node, ruleId });
-    }
-    listen(target, type, fn, opts, ruleId) {
-      target.addEventListener(type, fn, opts);
-      this.items.push({ type: "listener", target, evt: type, fn, opts, ruleId });
-    }
-    custom(undo, ruleId) {
-      this.items.push({ type: "custom", undo, ruleId });
-    }
-    _mark(el, ruleId) {
-      if (!ruleId || !el.setAttribute) return;
-      const cur = (el.getAttribute("data-hj-fixed") || "").split(" ").filter(Boolean);
-      if (!cur.includes(ruleId)) {
-        cur.push(ruleId);
-        el.setAttribute("data-hj-fixed", cur.join(" "));
-        this.items.push({ type: "mark", el });
-      }
-    }
-    /** ruleId өгвөл зөвхөн тэр дүрмийн өөрчлөлтийг буцаана */
-    revert(ruleId) {
-      const keep = [];
-      for (let i = this.items.length - 1; i >= 0; i--) {
-        const c = this.items[i];
-        if (ruleId && c.ruleId !== ruleId && c.type !== "mark") {
-          keep.unshift(c);
-          continue;
-        }
-        if (ruleId && c.type === "mark") {
-          keep.unshift(c);
-          continue;
-        }
-        try {
-          if (c.type === "attr") c.had ? c.el.setAttribute(c.name, c.prev) : c.el.removeAttribute(c.name);
-          else if (c.type === "style") {
-            c.prev ? c.el.style.setProperty(c.prop, c.prev, c.prevPriority) : c.el.style.removeProperty(c.prop);
-            if (!c.hadAttr && !c.el.getAttribute("style")) c.el.removeAttribute("style");
-          } else if (c.type === "node") c.node.remove();
-          else if (c.type === "listener") c.target.removeEventListener(c.evt, c.fn, c.opts);
-          else if (c.type === "custom") c.undo();
-          else if (c.type === "mark") c.el.removeAttribute("data-hj-fixed");
-        } catch {
-        }
-      }
-      this.items = keep;
-    }
-    get count() {
-      return this.items.filter((c) => c.type !== "mark").length;
-    }
+  // src/core/config.js
+  var DEFAULTS = {
+    level: "AA",
+    // A | AA | AAA
+    fix: "safe",
+    // false | 'safe' | 'heuristic'
+    audit: true,
+    deep: false,
+    observe: true,
+    widget: true,
+    launcher: true,
+    auditor: false,
+    lang: null,
+    // засварт хэрэглэх хуудасны хэл (html lang байхгүй үед)
+    uiLang: null,
+    // самбарын хэл
+    languages: ["mn", "en"],
+    position: "bottom-right",
+    color: "#0b4bd1",
+    focusColor: "#0b1f3a",
+    shortcut: "alt+shift+a",
+    ignore: [],
+    rules: {},
+    only: null,
+    storage: "local",
+    respectOS: true,
+    console: false,
+    reportEndpoint: null,
+    reportSampleRate: 1,
+    statementUrl: null,
+    feedbackUrl: null,
+    nonce: null
   };
+  var ATTR_MAP = {
+    lang: "lang",
+    uiLang: "ui-lang",
+    level: "level",
+    fix: "fix",
+    auditor: "auditor",
+    widget: "widget",
+    launcher: "launcher",
+    position: "position",
+    color: "color",
+    focusColor: "focus-color",
+    statementUrl: "statement-url",
+    feedbackUrl: "feedback-url",
+    reportEndpoint: "report-endpoint",
+    ignore: "ignore",
+    shortcut: "shortcut",
+    observe: "observe",
+    audit: "audit",
+    deep: "deep",
+    storage: "storage",
+    console: "console",
+    languages: "languages",
+    only: "only",
+    nonce: "nonce",
+    reportSampleRate: "report-sample-rate",
+    offsetX: "offset-x",
+    offsetY: "offset-y"
+  };
+  var LIST_KEYS = /* @__PURE__ */ new Set(["ignore", "languages", "only"]);
+  var LEVELS = /* @__PURE__ */ new Set(["A", "AA", "AAA"]);
+  var FIX_TIERS = /* @__PURE__ */ new Set(["safe", "heuristic"]);
+  var POSITIONS = /* @__PURE__ */ new Set(["bottom-right", "bottom-left", "top-right", "top-left"]);
+  var STORAGES = /* @__PURE__ */ new Set(["local", "cookie"]);
+  function configFromScript(script2) {
+    if (!script2 || typeof script2.getAttribute !== "function") return {};
+    const out = {};
+    for (const [k, a] of Object.entries(ATTR_MAP)) {
+      const v = script2.getAttribute(`data-${a}`);
+      if (v === null) continue;
+      if (v === "true" || v === "") out[k] = true;
+      else if (v === "false") out[k] = false;
+      else if (LIST_KEYS.has(k)) out[k] = v.split(",").map((s) => s.trim()).filter(Boolean);
+      else out[k] = v;
+    }
+    return out;
+  }
+  var toList = (v) => Array.isArray(v) ? v.map(String).map((s) => s.trim()).filter(Boolean) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  function normalizeConfig(...layers) {
+    const c = Object.assign({}, DEFAULTS, ...layers.filter(Boolean));
+    const warnings = [];
+    const bad = (k, v, d) => {
+      warnings.push(`config.${k}: "${v}" хүчингүй, "${d}" ашиглав`);
+      c[k] = d;
+    };
+    c.level = String(c.level || "AA").toUpperCase();
+    if (!LEVELS.has(c.level)) bad("level", c.level, "AA");
+    if (c.fix === true) c.fix = "safe";
+    if (c.fix === "off" || c.fix === "none" || c.fix === "false" || c.fix === false || c.fix == null) c.fix = false;
+    else if (!FIX_TIERS.has(c.fix)) bad("fix", c.fix, "safe");
+    if (!POSITIONS.has(c.position)) bad("position", c.position, "bottom-right");
+    if (c.storage === true) c.storage = "local";
+    if (c.storage === "false" || c.storage === "none") c.storage = false;
+    if (c.storage && !STORAGES.has(c.storage)) bad("storage", c.storage, "local");
+    c.ignore = toList(c.ignore);
+    c.languages = toList(c.languages);
+    if (!c.languages.length) c.languages = ["mn", "en"];
+    c.only = c.only == null || c.only === false ? null : toList(c.only);
+    if (c.only && !c.only.length) c.only = null;
+    const rate = Number(c.reportSampleRate);
+    c.reportSampleRate = Number.isFinite(rate) ? Math.min(1, Math.max(0, rate)) : 1;
+    if (c.rules && typeof c.rules !== "object") bad("rules", c.rules, "{}");
+    if (c.rules == null) c.rules = {};
+    if (c.lang) c.lang = String(c.lang).split("-")[0].toLowerCase();
+    if (c.uiLang) c.uiLang = String(c.uiLang).toLowerCase();
+    if (c.uiLang && !c.languages.includes(c.uiLang)) c.languages = [c.uiLang, ...c.languages];
+    for (const k of ["audit", "deep", "observe", "widget", "launcher", "auditor", "respectOS", "console"]) c[k] = c[k] === "false" ? false : !!c[k];
+    if (c.shortcut === false || c.shortcut === "false" || c.shortcut === "none") c.shortcut = null;
+    c.warnings = warnings;
+    return c;
+  }
+
+  // src/core/observer.js
+  function createObserver({ win, doc, isBusy, onPartial, onNavigate, debounce = 400, navDelay = 800 }) {
+    const pending = /* @__PURE__ */ new Set();
+    let timer = null;
+    let navTimer = null;
+    let destroyed = false;
+    let mo = null;
+    function flush() {
+      timer = null;
+      if (destroyed) return;
+      const all = [...pending];
+      pending.clear();
+      const roots = all.filter((n) => n.isConnected && !all.some((o) => o !== n && o.contains(n)));
+      if (!roots.length) return;
+      idle(() => {
+        if (!destroyed) onPartial(roots);
+      });
+    }
+    function schedule() {
+      if (!timer) timer = win.setTimeout(flush, debounce);
+    }
+    if ("MutationObserver" in win) {
+      mo = new win.MutationObserver((records) => {
+        var _a3;
+        if (isBusy()) return;
+        for (const r of records) {
+          for (const n of r.addedNodes) {
+            if (n.nodeType === 1 && !isOwnUi(n) && !((_a3 = n.hasAttribute) == null ? void 0 : _a3.call(n, HOST_ATTR))) pending.add(n);
+          }
+        }
+        if (pending.size) schedule();
+      });
+    }
+    const onNav = () => {
+      win.clearTimeout(navTimer);
+      navTimer = win.setTimeout(() => {
+        if (!destroyed) onNavigate();
+      }, navDelay);
+    };
+    const hist = win.history;
+    const origPush = hist == null ? void 0 : hist.pushState;
+    const origReplace = hist == null ? void 0 : hist.replaceState;
+    if (origPush) {
+      hist.pushState = function(...a) {
+        const r = origPush.apply(this, a);
+        onNav();
+        return r;
+      };
+      hist.replaceState = function(...a) {
+        const r = origReplace.apply(this, a);
+        onNav();
+        return r;
+      };
+      win.addEventListener("popstate", onNav);
+    }
+    return {
+      start() {
+        mo == null ? void 0 : mo.observe(doc.body, { childList: true, subtree: true });
+      },
+      /** Plugin-ийн өөрийн өөрчлөлтийн бүртгэлийг хаяна */
+      drop() {
+        mo == null ? void 0 : mo.takeRecords();
+      },
+      destroy() {
+        destroyed = true;
+        win.clearTimeout(timer);
+        win.clearTimeout(navTimer);
+        mo == null ? void 0 : mo.disconnect();
+        pending.clear();
+        if (origPush && hist.pushState !== origPush) {
+          hist.pushState = origPush;
+          hist.replaceState = origReplace;
+        }
+        win.removeEventListener("popstate", onNav);
+      }
+    };
+  }
 
   // src/fix/runtime.js
   function createRuntime(doc, win, changes, config) {
@@ -3312,11 +3613,29 @@ body input:is([type="checkbox"],[type="radio"])${NOT_UI}{width:24px!important;he
 body *${NOT_UI}{background-image:none!important}`);
     return css2.join("\n");
   }
+  var ENUMS = { contrast: ["default", "light", "dark", "invert"], saturation: ["default", "low", "high", "mono"], readingGuide: ["off", "line", "mask"] };
+  function sanitizePrefs(input, base = DEFAULT_PREFS) {
+    const out = { ...base };
+    if (!input || typeof input !== "object") return out;
+    for (const k of Object.keys(DEFAULT_PREFS)) {
+      if (!(k in input)) continue;
+      const v = input[k];
+      if (k === "fontScale") {
+        const n = Number(v);
+        out[k] = Number.isFinite(n) ? Math.min(2, Math.max(1, Math.round(n * 10) / 10)) : base[k];
+      } else if (ENUMS[k]) {
+        out[k] = ENUMS[k].includes(v) ? v : base[k];
+      } else {
+        out[k] = v === true || v === "true";
+      }
+    }
+    return out;
+  }
   function createPreferences({ doc, win, config, storage, onChange }) {
     var _a3;
-    let prefs = { ...DEFAULT_PREFS, ...config.defaults || {} };
+    let prefs = sanitizePrefs(config.defaults, DEFAULT_PREFS);
     const saved = storage.get();
-    if (saved) prefs = { ...prefs, ...saved };
+    if (saved && typeof saved === "object") prefs = sanitizePrefs(saved, prefs);
     else if (config.respectOS !== false && ((_a3 = win.matchMedia) == null ? void 0 : _a3.call(win, "(prefers-reduced-motion: reduce)").matches)) {
       prefs.stopMotion = true;
     }
@@ -3421,8 +3740,7 @@ body *${NOT_UI}{background-image:none!important}`);
       motion();
     }
     function set(patch, { silent = false } = {}) {
-      prefs = { ...prefs, ...patch };
-      prefs.fontScale = Math.min(2, Math.max(1, Math.round(prefs.fontScale * 10) / 10));
+      prefs = sanitizePrefs(patch, prefs);
       storage.set(prefs);
       apply();
       if (!silent) onChange == null ? void 0 : onChange(prefs, patch);
@@ -3659,9 +3977,8 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       ${f.fixed && f.fix ? `<div class="meta">✓ ${esc(f.fix[lang] || f.fix.en)}</div>` : ""}
       ${f.selector ? `<div class="meta"><code>${esc(f.selector)}</code></div><button type="button" class="btn small" data-show="${esc(f.id)}">${esc(t("auditShow"))}<span class="sr"> ${esc(f.sc.join(", "))}</span></button>` : ""}
     </li>`).join("");
-      const unfixedFail = r.findings.filter((f) => f.outcome === "fail" && !f.fixed).length;
       return `<div class="stats">
-      <div class="stat"><b>${unfixedFail}</b>${esc(t("auditFail"))}</div>
+      <div class="stat"><b>${r.summary.remaining}</b>${esc(t("auditFail"))}</div>
       <div class="stat"><b>${r.summary.review}</b>${esc(t("auditReview"))}</div>
       <div class="stat"><b>${r.summary.fixed}</b>${esc(t("auditFixed"))}</div>
     </div>
@@ -3740,10 +4057,10 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       if (el.id) return `#${el.id}`;
       return null;
     }
-    function show() {
+    function show(opener) {
       if (open) return;
       open = true;
-      lastFocus = doc.activeElement;
+      lastFocus = opener || (doc.activeElement && doc.activeElement !== doc.body && !host.contains(doc.activeElement) ? doc.activeElement : null);
       render();
       panel.hidden = false;
       launcher.setAttribute("aria-expanded", "true");
@@ -3754,8 +4071,10 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       open = false;
       panel.hidden = true;
       launcher.setAttribute("aria-expanded", "false");
-      if (lastFocus && lastFocus !== doc.body && lastFocus.isConnected && config.launcher === false) lastFocus.focus();
-      else launcher.focus();
+      const back = lastFocus && lastFocus.isConnected && typeof lastFocus.focus === "function" ? lastFocus : null;
+      if (back) back.focus();
+      if ((!back || doc.activeElement !== back) && config.launcher !== false) launcher.focus();
+      lastFocus = null;
     }
     const toggle = () => open ? hide() : show();
     launcher.addEventListener("click", toggle);
@@ -3836,8 +4155,7 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       const tr = (_b = (_a3 = e.target).closest) == null ? void 0 : _b.call(_a3, "[data-hurteemj-open]");
       if (tr) {
         e.preventDefault();
-        lastFocus = tr;
-        show();
+        show(tr);
       }
     };
     doc.addEventListener("click", onOpenTrigger);
@@ -3933,7 +4251,7 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
     updateGuide();
     return {
       host,
-      open: show,
+      open: () => show(),
       close: hide,
       toggle,
       refresh: () => {
@@ -4113,75 +4431,6 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
 
   // src/index.js
   var VERSION = "1.0.0";
-  var DEFAULTS = {
-    level: "AA",
-    // A | AA | AAA
-    fix: "safe",
-    // false | 'safe' | 'heuristic'
-    audit: true,
-    deep: false,
-    observe: true,
-    widget: true,
-    launcher: true,
-    auditor: false,
-    lang: null,
-    // засварт хэрэглэх хуудасны хэл (html lang байхгүй үед)
-    uiLang: null,
-    // самбарын хэл
-    languages: ["mn", "en"],
-    position: "bottom-right",
-    color: "#0b4bd1",
-    focusColor: "#0b1f3a",
-    shortcut: "alt+shift+a",
-    ignore: [],
-    rules: {},
-    only: null,
-    storage: "local",
-    respectOS: true,
-    console: false,
-    reportEndpoint: null,
-    reportSampleRate: 1,
-    statementUrl: null,
-    feedbackUrl: null
-  };
-  var ATTR_MAP = {
-    lang: "lang",
-    uiLang: "ui-lang",
-    level: "level",
-    fix: "fix",
-    auditor: "auditor",
-    widget: "widget",
-    launcher: "launcher",
-    position: "position",
-    color: "color",
-    focusColor: "focus-color",
-    statementUrl: "statement-url",
-    feedbackUrl: "feedback-url",
-    reportEndpoint: "report-endpoint",
-    ignore: "ignore",
-    shortcut: "shortcut",
-    observe: "observe",
-    audit: "audit",
-    deep: "deep",
-    storage: "storage",
-    console: "console",
-    languages: "languages",
-    only: "only",
-    nonce: "nonce"
-  };
-  function configFromScript(script2) {
-    if (!script2) return {};
-    const out = {};
-    for (const [k, a] of Object.entries(ATTR_MAP)) {
-      const v = script2.getAttribute(`data-${a}`);
-      if (v === null) continue;
-      if (v === "true" || v === "") out[k] = true;
-      else if (v === "false") out[k] = false;
-      else if (["ignore", "languages", "only"].includes(k)) out[k] = v.split(",").map((s) => s.trim()).filter(Boolean);
-      else out[k] = v;
-    }
-    return out;
-  }
   function emit(doc, name, detail) {
     try {
       doc.dispatchEvent(new CustomEvent(`hurteemj:${name}`, { detail }));
@@ -4189,21 +4438,27 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
     }
   }
   function init(userConfig = {}) {
-    var _a3, _b, _c;
+    var _a3;
     const win = userConfig.window || window;
     const doc = win.document;
     if (win.__hurteemj && !userConfig.force) return win.__hurteemj;
-    const config = { ...DEFAULTS, ...win.HurteemjConfig || {}, ...userConfig };
+    const config = normalizeConfig(win.HurteemjConfig, userConfig);
     if (/[?&]hurteemj-audit\b/.test(((_a3 = win.location) == null ? void 0 : _a3.search) || "")) config.auditor = true;
-    if (config.level) config.level = String(config.level).toUpperCase();
-    if (config.fix === "off" || config.fix === "none") config.fix = false;
+    if (config.warnings.length && typeof console !== "undefined") config.warnings.forEach((w) => console.warn(`[hurteemj] ${w}`));
     const changes = new ChangeLog();
     const runtime = createRuntime(doc, win, changes, config);
-    const pageLang = () => (doc.documentElement.getAttribute("lang") || config.lang || "mn").split("-")[0].toLowerCase();
-    let uiLang = config.uiLang || (config.languages.includes(pageLang()) ? pageLang() : config.languages[0] || "mn");
+    let detected;
+    const pageLang = () => {
+      const attr = doc.documentElement.getAttribute("lang");
+      if (attr) return attr.split("-")[0].toLowerCase();
+      if (config.lang) return config.lang;
+      if (detected === void 0) detected = detectLang(doc) || null;
+      return detected || uiLang || config.languages[0];
+    };
+    let uiLang = config.uiLang || (config.languages.includes(pageLang()) ? pageLang() : config.languages[0]);
     const t = translator(() => uiLang, config.strings);
-    const clickTracked = trackedTargets();
-    const state = { report: null, busy: false, destroyed: false };
+    const clickTracked = trackedTargets(win);
+    const state = { report: null, busy: false, destroyed: false, reported: false };
     const storage = config.storage ? createStorage(config, win) : { get: () => null, set: () => {
     } };
     const prefs = createPreferences({
@@ -4217,6 +4472,8 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
         (_a4 = config.onPrefsChange) == null ? void 0 : _a4.call(config, p, patch);
       }
     });
+    let widget = null;
+    let observer = null;
     async function audit({ deep = config.deep, fix: fix2 = true, scope } = {}) {
       var _a4;
       state.busy = true;
@@ -4224,8 +4481,7 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
         const rep = runAudit({ doc, win, config, deep, runtime, changes, clickTracked, pageLang: pageLang(), scope });
         if (fix2 && config.fix) await applyFixes(rep, { doc, win, config, runtime, changes, pageLang: pageLang() });
         if (scope && state.report) {
-          const keep = state.report.findings.filter((f) => !f.node || f.node.isConnected);
-          state.report = buildReport({ doc, win, config, findings: keep.concat(rep.findings), errors: state.report.errors.concat(rep.errors) });
+          state.report = buildReport({ doc, win, config, findings: mergeFindings(state.report.findings, rep.findings), errors: state.report.errors.concat(rep.errors) });
         } else {
           state.report = rep;
         }
@@ -4234,7 +4490,7 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
         if (config.console && !scope) logReport(state.report, uiLang);
         return state.report;
       } finally {
-        observer == null ? void 0 : observer.takeRecords();
+        observer == null ? void 0 : observer.drop();
         state.busy = false;
       }
     }
@@ -4246,7 +4502,7 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
         emit(doc, "fix", { fixed: n, report: state.report });
         return n;
       } finally {
-        observer == null ? void 0 : observer.takeRecords();
+        observer == null ? void 0 : observer.drop();
         state.busy = false;
       }
     }
@@ -4258,78 +4514,53 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
           f.fixed = false;
           f.fix = null;
         }
+        state.report = buildReport({ doc, win, config, findings: state.report.findings, errors: state.report.errors });
       }
-      observer == null ? void 0 : observer.takeRecords();
+      observer == null ? void 0 : observer.drop();
       state.busy = false;
     }
     function sendReport(rep) {
-      var _a4, _b2, _c2, _d;
-      if (!config.reportEndpoint && !config.onReport) return;
+      var _a4, _b, _c, _d;
+      if (!rep || !config.reportEndpoint && !config.onReport) return;
       if (Math.random() > config.reportSampleRate) return;
       const payload = serialize(rep, uiLang);
       payload.findings = payload.findings.slice(0, 500);
-      (_a4 = config.onReport) == null ? void 0 : _a4.call(config, payload);
+      try {
+        (_a4 = config.onReport) == null ? void 0 : _a4.call(config, payload);
+      } catch {
+      }
       if (!config.reportEndpoint) return;
       try {
         const body = JSON.stringify(payload);
-        const ok = (_c2 = (_b2 = win.navigator).sendBeacon) == null ? void 0 : _c2.call(_b2, config.reportEndpoint, new Blob([body], { type: "application/json" }));
+        const ok = (_c = (_b = win.navigator).sendBeacon) == null ? void 0 : _c.call(_b, config.reportEndpoint, new Blob([body], { type: "application/json" }));
         if (!ok) (_d = win.fetch) == null ? void 0 : _d.call(win, config.reportEndpoint, { method: "POST", body, headers: { "content-type": "application/json" }, keepalive: true, credentials: "omit" }).catch(() => {
         });
       } catch {
       }
     }
-    let observer = null;
-    const pending = /* @__PURE__ */ new Set();
-    let timer = null;
-    function flush() {
-      timer = null;
-      if (state.destroyed) return;
-      const roots = [...pending].filter((n) => n.isConnected && ![...pending].some((o) => o !== n && o.contains(n)));
-      pending.clear();
-      idle(async () => {
-        for (const r of roots) {
-          if (config.audit) await audit({ scope: r, deep: false });
-          prefs.refresh(r);
-        }
-        widget == null ? void 0 : widget.refresh();
-      });
-    }
-    function schedule(delay = 400) {
-      if (!timer) timer = win.setTimeout(flush, delay);
-    }
-    if (config.observe && "MutationObserver" in win) {
-      observer = new win.MutationObserver((records) => {
-        var _a4;
-        if (state.busy) return;
-        for (const r of records) {
-          for (const n of r.addedNodes) {
-            if (n.nodeType === 1 && !isOwnUi(n) && !((_a4 = n.hasAttribute) == null ? void 0 : _a4.call(n, HOST_ATTR))) pending.add(n);
+    if (config.observe) {
+      observer = createObserver({
+        win,
+        doc,
+        isBusy: () => state.busy,
+        onPartial: async (roots) => {
+          if (state.destroyed) return;
+          if (config.audit) for (const r of roots) await audit({ scope: r, deep: false });
+          prefs.refresh();
+          widget == null ? void 0 : widget.refresh();
+        },
+        onNavigate: async () => {
+          if (state.destroyed) return;
+          detected = void 0;
+          if (config.audit) {
+            await audit();
+            sendReport(state.report);
           }
+          prefs.refresh();
+          widget == null ? void 0 : widget.refresh();
         }
-        if (pending.size) schedule();
       });
     }
-    let fullTimer = null;
-    const onNav = () => {
-      win.clearTimeout(fullTimer);
-      fullTimer = win.setTimeout(() => audit().then(() => widget == null ? void 0 : widget.refresh()), 800);
-    };
-    const origPush = (_b = win.history) == null ? void 0 : _b.pushState;
-    const origReplace = (_c = win.history) == null ? void 0 : _c.replaceState;
-    if (config.observe && origPush) {
-      win.history.pushState = function(...a) {
-        const r = origPush.apply(this, a);
-        onNav();
-        return r;
-      };
-      win.history.replaceState = function(...a) {
-        const r = origReplace.apply(this, a);
-        onNav();
-        return r;
-      };
-      win.addEventListener("popstate", onNav);
-    }
-    let widget = null;
     const api = {
       version: VERSION,
       config,
@@ -4360,20 +4591,20 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       close: () => widget == null ? void 0 : widget.close(),
       toggle: () => widget == null ? void 0 : widget.toggle(),
       setLanguage(l) {
-        uiLang = l;
-        widget == null ? void 0 : widget.refresh();
+        if (config.languages.includes(l)) {
+          uiLang = l;
+          widget == null ? void 0 : widget.refresh();
+        }
+      },
+      get language() {
+        return uiLang;
       },
       announce: (text, p) => runtime.announce(text, p),
       toJSON: () => state.report ? serialize(state.report, uiLang) : null,
-      changes: () => changes.items.filter((c) => c.type !== "mark").map((c) => ({ type: c.type, ruleId: c.ruleId, attr: c.name || c.prop, prev: c.prev })),
+      changes: () => changes.summary(),
       destroy() {
         state.destroyed = true;
-        observer == null ? void 0 : observer.disconnect();
-        if (origPush) {
-          win.history.pushState = origPush;
-          win.history.replaceState = origReplace;
-          win.removeEventListener("popstate", onNav);
-        }
+        observer == null ? void 0 : observer.destroy();
         changes.revert();
         prefs.destroy();
         widget == null ? void 0 : widget.destroy();
@@ -4384,6 +4615,7 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
     win.__hurteemj = api;
     const start = async () => {
       var _a4;
+      if (state.destroyed) return;
       runtime.ensureBase();
       prefs.apply();
       if (config.widget) {
@@ -4409,9 +4641,12 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
         sendReport(state.report);
         widget == null ? void 0 : widget.refresh();
       }
-      observer == null ? void 0 : observer.observe(doc.body, { childList: true, subtree: true });
+      observer == null ? void 0 : observer.start();
       emit(doc, "ready", api);
-      (_a4 = config.onReady) == null ? void 0 : _a4.call(config, api);
+      try {
+        (_a4 = config.onReady) == null ? void 0 : _a4.call(config, api);
+      } catch {
+      }
     };
     if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", start, { once: true });
     else start();
@@ -4419,11 +4654,10 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
   }
   function auditPage(config = {}) {
     const win = config.window || window;
-    const cfg = { ...DEFAULTS, ...config, fix: false };
+    const cfg = normalizeConfig(config, { fix: false });
     const changes = new ChangeLog();
     const runtime = createRuntime(win.document, win, changes, cfg);
-    const rep = runAudit({ doc: win.document, win, config: cfg, deep: !!config.deep, runtime, changes, clickTracked: trackedTargets() });
-    return rep;
+    return runAudit({ doc: win.document, win, config: cfg, deep: !!cfg.deep, runtime, changes, clickTracked: trackedTargets(win) });
   }
   function logReport(rep, lang) {
     var _a3, _b, _c;

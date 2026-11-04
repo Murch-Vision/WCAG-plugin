@@ -118,9 +118,21 @@ export default [
         .filter((el) => !ctx.ignored(el) && isVisible(el) && !isHiddenFromAT(el) && !el.disabled)
         .map((el) => ({ el, r: el.getBoundingClientRect() }))
         .filter(({ r }) => r.width > 0 && r.height > 0);
-      // Үүрлэсэн target-ыг (жишээ нь link доторх span[onclick]) нэгтгэнэ
-      const uniq = targets.filter((t) => !targets.some((o) => o !== t && o.el.contains(t.el) && o.el.matches('a[href], button')));
+      // Үүрлэсэн target-ыг (жишээ нь link доторх span[onclick]) нэгтгэнэ — гаднах link/button-ийг л тооцно
+      const uniq = targets.filter((t) => !t.el.parentElement?.closest('a[href], button'));
       const small = uniq.filter(({ el, r }) => (r.width < min - 0.5 || r.height < min - 0.5) && !isInlineInText(el));
+      if (!small.length) return [];
+      // Орон зайн торон индекс: 24px тойргийн огтлолцлыг O(n) орчимд шалгана (том хуудсанд O(n²)-оос зайлсхийнэ)
+      const CELL = 48;
+      const grid = new Map();
+      const cellsOf = (r, pad) => {
+        const out = [];
+        for (let x = Math.floor((r.left - pad) / CELL); x <= Math.floor((r.right + pad) / CELL); x++) {
+          for (let y = Math.floor((r.top - pad) / CELL); y <= Math.floor((r.bottom + pad) / CELL); y++) out.push(`${x},${y}`);
+        }
+        return out;
+      };
+      for (const t of uniq) for (const c of cellsOf(t.r, 24)) (grid.get(c) || grid.set(c, []).get(c)).push(t);
       const out = [];
       for (const t of small) {
         const { el, r } = t;
@@ -134,7 +146,8 @@ export default [
         }
         // Spacing exception: 24px диаметртэй тойрог бусад target-тай огтлолцохгүй бол OK
         const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        const conflict = uniq.find((o) => {
+        const candidates = grid.get(`${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`) || [];
+        const conflict = candidates.find((o) => {
           if (o === t || o.el.contains(el) || el.contains(o.el)) return false;
           const ox = o.r.left + o.r.width / 2, oy = o.r.top + o.r.height / 2;
           const oSmall = o.r.width < 24 || o.r.height < 24;

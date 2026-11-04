@@ -3,7 +3,7 @@
  * Plugin Name: Hurteemj — WCAG 2.2 Accessibility
  * Description: WCAG 2.2 (ISO/IEC 40500) аудит, аюулгүй засвар, хэрэглэгчийн хүртээмжийн самбар.
  * Version: 1.0.0
- * Requires at least: 6.0
+ * Requires at least: 6.3
  * Requires PHP: 7.4
  * License: MIT
  * Text Domain: hurteemj
@@ -50,7 +50,8 @@ add_action('admin_init', function () {
     $out['fix'] = in_array($in['fix'] ?? '', ['off', 'safe', 'heuristic'], true) ? $in['fix'] : $d['fix'];
     $out['ui_lang'] = in_array($in['ui_lang'] ?? '', ['mn', 'en'], true) ? $in['ui_lang'] : $d['ui_lang'];
     $out['position'] = in_array($in['position'] ?? '', ['bottom-right', 'bottom-left', 'top-right', 'top-left'], true) ? $in['position'] : $d['position'];
-    $out['color'] = sanitize_hex_color($in['color'] ?? '') ?: $d['color'];
+    $color = (string) ($in['color'] ?? '');
+    $out['color'] = preg_match('/^#([A-Fa-f0-9]{3}){1,2}$/', $color) ? $color : $d['color'];
     $out['statement_url'] = esc_url_raw($in['statement_url'] ?? '');
     $out['feedback_url'] = esc_url_raw($in['feedback_url'] ?? '', ['http', 'https', 'mailto']);
     $out['report_endpoint'] = esc_url_raw($in['report_endpoint'] ?? '');

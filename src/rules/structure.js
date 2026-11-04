@@ -12,7 +12,7 @@ export function validLang(v) {
 }
 
 /** Хуудасны текстээс хэлийг таах (монгол кирилл ↔ орос ↔ англи) */
-function detectLang(doc) {
+export function detectLang(doc) {
   const sample = normalize((doc.body?.innerText || '').slice(0, 4000));
   const { script, mnHint } = scriptOf(sample);
   if (script === 'Cyrl') return mnHint ? 'mn' : /[ыъэ]/.test(sample) && !mnHint ? 'ru' : null;

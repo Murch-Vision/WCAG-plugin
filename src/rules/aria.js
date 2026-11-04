@@ -323,14 +323,19 @@ export default [
     sc: ['4.1.3'],
     impact: 'serious',
     selector: '.toast, .snackbar, .notification, .alert, .flash, .notice, [class*="toast"], [class*="snackbar"], [class*="alert-"], .message.success, .message.error, .invalid-feedback, .form-error, [class*="flash-"]',
-    evaluate(el) {
+    evaluate(el, ctx) {
       if (!isVisible(el) || !normalize(el.textContent)) return null;
       if (el.closest('[role="status"], [role="alert"], [role="log"], [aria-live], output, [role="alertdialog"]')) return null;
+      const dynamic = !!ctx.partial; // MutationObserver-ээр шинээр нэмэгдсэн — жинхэнэ "status message"
       if (el.matches('a, button') || el.querySelector('a[href], button, input')) {
         // Харилцан үйлдэлтэй баннер нь status message биш байж болно
         return review(el, m('Мэдэгдлийн элемент бололтой. Динамикаар гарч ирдэг бол role="status"/"alert" эсвэл aria-live хэрэгтэй.', 'Looks like a notification. If it appears dynamically it needs role="status"/"alert" or aria-live.'));
       }
       const isError = /(error|danger|fail|invalid|алдаа)/i.test(el.className + el.textContent.slice(0, 40));
+      if (!dynamic) {
+        // Хуудас ачаалахад аль хэдийн байсан контент нь 4.1.3-ын "status message" биш байж болно (статик мэдээлэл)
+        return review(el, m('Мэдэгдлийн загвартай элемент. Хэрэв JavaScript-ээр динамикаар гарч ирдэг бол role="status"/"alert" шаардлагатай.', 'Notification-styled element. If it is injected dynamically by script it needs role="status"/"alert".'), { isError, static: true });
+      }
       return fail(el, m('Төлөвийн мессеж дэлгэц уншигчид зарлагдахгүй (role="status" / role="alert" / aria-live алга).', 'Status message is not announced to screen readers (no role="status"/"alert"/aria-live).'), { isError });
     },
     fix: {
@@ -339,7 +344,7 @@ export default [
         if (f.outcome !== 'fail') return false;
         const role = f.data?.isError ? 'alert' : 'status';
         ctx.changes.setAttr(f.node, 'role', role, 'status-messages');
-        // Аль хэдийн харагдаж буй контентыг дахин зарлуулах
+        // Шинээр гарч ирсэн контентыг зарлуулах (role нэмэхэд дэлгэц уншигч өнгөрсөн өөрчлөлтийг мэдэхгүй)
         ctx.runtime.announce(normalize(f.node.textContent), role === 'alert' ? 'assertive' : 'polite');
         return m(`role="${role}" нэмэв.`, `Added role="${role}".`);
       },

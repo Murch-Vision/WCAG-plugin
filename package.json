@@ -6,12 +6,17 @@
   "main": "dist/hurteemj.esm.js",
   "module": "dist/hurteemj.esm.js",
   "browser": "dist/hurteemj.min.js",
+  "types": "types/index.d.ts",
   "exports": {
-    ".": "./dist/hurteemj.esm.js",
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./dist/hurteemj.esm.js"
+    },
     "./react": "./integrations/react/index.js",
     "./vue": "./integrations/vue/index.js",
     "./element": "./integrations/web-component/index.js",
-    "./criteria": "./src/wcag/criteria.js"
+    "./criteria": "./src/wcag/criteria.js",
+    "./dist/*": "./dist/*"
   },
   "bin": {
     "hurteemj-audit": "cli/audit.js"
@@ -20,12 +25,28 @@
     "dist",
     "src",
     "integrations",
-    "cli"
+    "cli",
+    "types"
   ],
+  "sideEffects": [
+    "./dist/hurteemj.min.js",
+    "./dist/hurteemj.js",
+    "./integrations/web-component/index.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "node build.js",
     "test": "npm run build && node --test test/*.test.js",
+    "docs": "node scripts/gen-docs.js",
+    "prepublishOnly": "npm run build && npm run docs",
     "audit:url": "node cli/audit.js"
+  },
+  "peerDependencies": {
+    "playwright": ">=1.40",
+    "react": ">=17",
+    "vue": ">=3"
   },
   "keywords": [
     "wcag",
@@ -40,10 +61,17 @@
   "peerDependenciesMeta": {
     "playwright": {
       "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
     }
   },
   "devDependencies": {
     "axe-core": "^4.11.0",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "playwright": "^1.63.0"
   }
 }

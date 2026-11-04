@@ -21,9 +21,12 @@
 
 ```bash
 npm install
-npm run build        # dist/hurteemj.min.js (~49KB gzip), dist/hurteemj.esm.js
-npm test             # 18 тест: unit + Playwright/Chromium + axe-core хөндлөн шалгалт
+npx playwright install chromium   # тестэд (нэг удаа)
+npm run build        # dist/hurteemj.min.js (~50KB gzip), dist/hurteemj.esm.js
+npm test             # 30 тест: unit + regression + Playwright/Chromium + axe-core хөндлөн шалгалт
 ```
+
+TypeScript тодорхойлолт (`types/index.d.ts`) багцад орсон: `import type { Config, Report } from 'hurteemj'`.
 
 ```js
 import { init } from 'hurteemj';
@@ -46,7 +49,9 @@ npx hurteemj-audit https://example.mn --fail-on serious --format html --out repo
 | `api.audit({ deep })` | Дахин шалгаж тайлан буцаана |
 | `api.fix({ tier, ids })` | Засвар хэрэглэнэ |
 | `api.revert(ruleId?)` | Засварыг буцаана |
-| `api.report` / `api.toJSON()` | Сүүлийн тайлан |
+| `api.report` / `api.toJSON()` | Сүүлийн тайлан. `summary.remaining` = засагдаагүй үлдсэн зөрчил |
+| `api.config.warnings` | Буруу тохиргооны утгууд (анхдагч руу буцаасан) |
+| `api.language` / `api.setLanguage(l)` | Самбарын хэл |
 | `api.prefs.get/set/reset/applyProfile` | Хэрэглэгчийн тохиргоо |
 | `api.open/close/toggle()` | Самбар |
 | `api.announce(text, 'polite'\|'assertive')` | Дэлгэц уншигчид зарлах |
@@ -54,7 +59,9 @@ npx hurteemj-audit https://example.mn --fail-on serious --format html --out repo
 | `auditPage(config)` | Зөвхөн аудит хийнэ (виджет, засваргүй) |
 | `criteria`, `rules` | WCAG 2.2 каталог, дүрмийн жагсаалт |
 
-Дүрэм бүрийн SC, нөлөөлөл, засварын түвшинг [docs/RULES.md](docs/RULES.md)-ээс харна уу (`node scripts/gen-docs.js` кодоос автоматаар үүсгэнэ).
+Дүрэм бүрийн SC, нөлөөлөл, засварын түвшинг [docs/RULES.md](docs/RULES.md)-ээс харна уу (`npm run docs` кодоос автоматаар үүсгэнэ). Хяналтын явцад засагдсан алдаа, цаашдын сайжруулалтын саналыг [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)-ээс уншина уу.
+
+**Засварын зарчим:** хуудас ачаалахад аль хэдийн байсан мэдэгдлийн хайрцгийг (`.alert`, `.toast`) зөвхөн хянах зүйл гэж үзнэ; JavaScript-ээр шинээр гарч ирсэн мэдэгдэлд л `role="status"` нэмнэ. Нэвтрэх талбарын paste туршилтыг зөвхөн хоосон, фокусгүй талбарт хийнэ. Засвар бүр `data-hj-fixed="rule-id"` тэмдэглэгээтэй.
 
 ## Нарийн тохиргоо
 
@@ -85,7 +92,9 @@ src/
   wcag/criteria.js     WCAG 2.2-ын 86 SC (mn/en, түвшин, автоматжилт)
   wcag/aria.js         WAI-ARIA 1.2 өгөгдөл
   rules/*.js           65 дүрэм (structure, media, contrast, forms, interaction, aria)
-  core/engine.js       аудит, засвар, тайлан
+  core/engine.js       аудит, засвар, тайлан, олдвор нэгтгэх
+  core/config.js       анхдагч тохиргоо, data-* уншилт, шалгалт (normalizeConfig)
+  core/observer.js     SPA: MutationObserver + history hook
   core/color.js        WCAG luminance, alpha blend, OKLab тодролын засвар
   core/dom.js          accessible name, role, visibility, shadow DOM
   fix/changes.js       буцаах боломжтой өөрчлөлтийн бүртгэл
@@ -93,9 +102,11 @@ src/
   prefs/preferences.js хэрэглэгчийн тохиргоо, профайл
   ui/widget.js         самбар (Shadow DOM)
 cli/audit.js           CI/CD аудит (Playwright)
+types/index.d.ts       TypeScript тодорхойлолт
 integrations/          react, vue, web-component, wordpress
 examples/              demo, csp, web-component, report-server
-docs/                  RESEARCH, INTEGRATION, RULES
+docs/                  RESEARCH, INTEGRATION, RULES, IMPROVEMENTS
+test/                  unit, browser, regression (Playwright + axe-core)
 ```
 
 ## Лиценз

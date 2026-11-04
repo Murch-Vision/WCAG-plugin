@@ -4,6 +4,67 @@ import { contrastRatio, parseColor, adjustForContrast, blend } from '../src/core
 import { CRITERIA, criteriaForLevel } from '../src/wcag/criteria.js';
 import { RULES } from '../src/rules/index.js';
 import { validLang } from '../src/rules/structure.js';
+import { normalizeConfig, configFromScript } from '../src/core/config.js';
+import { sanitizePrefs, DEFAULT_PREFS } from '../src/prefs/preferences.js';
+import { mergeFindings, serialize } from '../src/core/engine.js';
+
+test('normalizeConfig: давхарлалт, шалгалт, warnings', () => {
+  const c = normalizeConfig({ level: 'aa', fix: true, ignore: '.a, .b', languages: 'en' }, { uiLang: 'MN', only: [], reportSampleRate: -1 });
+  assert.equal(c.level, 'AA');
+  assert.equal(c.fix, 'safe');
+  assert.deepEqual(c.ignore, ['.a', '.b']);
+  assert.deepEqual(c.languages, ['mn', 'en'], 'uiLang нь languages-д нэмэгдэнэ');
+  assert.equal(c.only, null);
+  assert.equal(c.reportSampleRate, 0);
+  assert.deepEqual(c.warnings, []);
+  const bad = normalizeConfig({ level: 'B', fix: 'magic', position: 'center', storage: 'session' });
+  assert.deepEqual([bad.level, bad.fix, bad.position, bad.storage], ['AA', 'safe', 'bottom-right', 'local']);
+  assert.equal(bad.warnings.length, 4);
+  assert.equal(normalizeConfig({ fix: 'off' }).fix, false);
+  assert.equal(normalizeConfig({ shortcut: 'none' }).shortcut, null);
+});
+
+test('configFromScript: data-* → тохиргоо', () => {
+  const attrs = { 'data-level': 'AAA', 'data-fix': 'false', 'data-auditor': '', 'data-ignore': '.x, #y', 'data-report-sample-rate': '0.2' };
+  const c = configFromScript({ getAttribute: (n) => attrs[n] ?? null });
+  assert.deepEqual(c, { level: 'AAA', fix: false, auditor: true, ignore: ['.x', '#y'], reportSampleRate: '0.2' });
+  assert.deepEqual(configFromScript(null), {});
+});
+
+test('sanitizePrefs: хүчингүй утга, танигдахгүй түлхүүрийг хаяна', () => {
+  const p = sanitizePrefs({ fontScale: '1.75', contrast: 'invert', saturation: 'x', stopMotion: 'true', bogus: 1 }, DEFAULT_PREFS);
+  assert.equal(p.fontScale, 1.8);
+  assert.equal(p.contrast, 'invert');
+  assert.equal(p.saturation, 'default');
+  assert.equal(p.stopMotion, true);
+  assert.ok(!('bogus' in p));
+  assert.deepEqual(sanitizePrefs(null), DEFAULT_PREFS);
+});
+
+test('mergeFindings: давхардал, устсан node, шинэ төлөв', () => {
+  const live = { isConnected: true }, dead = { isConnected: false };
+  const prev = [
+    { ruleId: 'a', selector: '#x', node: live, outcome: 'fail', fixed: false },
+    { ruleId: 'b', selector: '#gone', node: dead, outcome: 'fail', fixed: false },
+    { ruleId: 'c', selector: null, node: null, outcome: 'review', fixed: false },
+  ];
+  const next = [
+    { ruleId: 'a', selector: '#x', node: live, outcome: 'fail', fixed: true },
+    { ruleId: 'd', selector: '#new', node: live, outcome: 'fail', fixed: false },
+  ];
+  const out = mergeFindings(prev, next);
+  assert.deepEqual(out.map((f) => `${f.ruleId}:${f.fixed}`), ['a:true', 'c:false', 'd:false']);
+});
+
+test('serialize: DOM node ба функцийг data-аас хасна, хэлээр мессеж сонгоно', () => {
+  const node = { nodeType: 1 };
+  const rep = { findings: [{ ruleId: 'r', node, message: { mn: 'м', en: 'e' }, fix: null, data: { container: node, list: [node, 1], fn: () => 1, n: 2 } }] };
+  const s = serialize(rep, 'mn');
+  assert.deepEqual(s.findings[0].data, { list: [1], n: 2 });
+  assert.equal(s.findings[0].message, 'м');
+  assert.ok(!('node' in s.findings[0]));
+  assert.equal(serialize(rep, 'de').findings[0].message, 'e', 'байхгүй хэл → англи');
+});
 
 test('WCAG 2.2 каталог: 86 SC, 9 шинэ, 4.1.1 хасагдсан', () => {
   assert.equal(CRITERIA.length, 86);

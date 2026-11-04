@@ -86,10 +86,31 @@ body *${NOT_UI}{background-image:none!important}`);
   return css.join('\n');
 }
 
+const ENUMS = { contrast: ['default', 'light', 'dark', 'invert'], saturation: ['default', 'low', 'high', 'mono'], readingGuide: ['off', 'line', 'mask'] };
+
+/** Хадгалагдсан/гаднаас ирсэн утгыг шалгаж, зөвхөн мэдэгдэж буй түлхүүр, хүчинтэй утгыг үлдээнэ */
+export function sanitizePrefs(input, base = DEFAULT_PREFS) {
+  const out = { ...base };
+  if (!input || typeof input !== 'object') return out;
+  for (const k of Object.keys(DEFAULT_PREFS)) {
+    if (!(k in input)) continue;
+    const v = input[k];
+    if (k === 'fontScale') {
+      const n = Number(v);
+      out[k] = Number.isFinite(n) ? Math.min(2, Math.max(1, Math.round(n * 10) / 10)) : base[k];
+    } else if (ENUMS[k]) {
+      out[k] = ENUMS[k].includes(v) ? v : base[k];
+    } else {
+      out[k] = v === true || v === 'true';
+    }
+  }
+  return out;
+}
+
 export function createPreferences({ doc, win, config, storage, onChange }) {
-  let prefs = { ...DEFAULT_PREFS, ...(config.defaults || {}) };
+  let prefs = sanitizePrefs(config.defaults, DEFAULT_PREFS);
   const saved = storage.get();
-  if (saved) prefs = { ...prefs, ...saved };
+  if (saved && typeof saved === 'object') prefs = sanitizePrefs(saved, prefs);
   else if (config.respectOS !== false && win.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
     // Үйлдлийн системийн тохиргоог хүндэтгэх (2.3.3)
     prefs.stopMotion = true;
@@ -176,8 +197,7 @@ export function createPreferences({ doc, win, config, storage, onChange }) {
   }
 
   function set(patch, { silent = false } = {}) {
-    prefs = { ...prefs, ...patch };
-    prefs.fontScale = Math.min(2, Math.max(1, Math.round(prefs.fontScale * 10) / 10));
+    prefs = sanitizePrefs(patch, prefs);
     storage.set(prefs);
     apply();
     if (!silent) onChange?.(prefs, patch);

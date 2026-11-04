@@ -10,7 +10,7 @@
  */
 import { RULES } from '../rules/index.js';
 import { CRITERIA_BY_ID, criteriaForLevel, levelIncludes } from '../wcag/criteria.js';
-import { cssPath, isIgnored, qsa, snippet } from './dom.js';
+import { cssPath, createPathCache, isIgnored, qsa, snippet } from './dom.js';
 import { fmt } from '../rules/util.js';
 
 const TIER = { safe: 1, heuristic: 2 };
@@ -33,7 +33,7 @@ export function activeRules(config) {
   });
 }
 
-function normalizeResult(rule, res, config) {
+function normalizeResult(rule, res, config, pathCache) {
   const sc = res.data?.sc || rule.sc;
   const inLevel = sc.filter((id) => CRITERIA_BY_ID[id] && levelIncludes(config.level, CRITERIA_BY_ID[id].level));
   if (!inLevel.length) return null;
@@ -48,7 +48,7 @@ function normalizeResult(rule, res, config) {
     message: res.message,
     data: res.data,
     node: res.node,
-    selector: res.node ? cssPath(res.node) : null,
+    selector: res.node ? cssPath(res.node, pathCache) : null,
     html: res.node?.outerHTML ? snippet(res.node) : null,
     fixed: false,
     fix: null,
@@ -67,14 +67,19 @@ export function runAudit({ doc, win, config, scope, deep = false, runtime, chang
   const partial = scope && scope !== doc;
   const ctx = {
     doc, win, config, level: config.level, scope: scope || doc, runtime, changes, clickTracked,
-    pageLang: pageLang || (doc.documentElement.lang || config.lang || 'mn').split('-')[0],
+    pageLang: pageLang || (doc.documentElement.lang || config.lang || 'en').split('-')[0].toLowerCase(),
     ignored: (el) => isIgnored(el, config.ignore),
+    partial,
   };
   const findings = [];
   const errors = [];
+  const timings = {};
+  const pathCache = createPathCache();
+  const now = () => (win.performance || Date).now();
   for (const rule of activeRules(config)) {
     if (rule.deep && !deep) continue;
     if (partial && rule.run && !rule.scoped) continue;
+    const tr = now();
     try {
       let results = [];
       if (rule.run) {
@@ -91,18 +96,19 @@ export function runAudit({ doc, win, config, scope, deep = false, runtime, chang
       }
       for (const res of results) {
         if (res.node && ctx.ignored(res.node)) continue;
-        const f = normalizeResult(rule, res, config);
+        const f = normalizeResult(rule, res, config, pathCache);
         if (f) findings.push(f);
       }
     } catch (e) {
       errors.push({ ruleId: rule.id, error: String(e && e.message || e) });
     }
+    timings[rule.id] = Math.round((now() - tr) * 10) / 10;
   }
   findings.sort((a, b) => (a.outcome === b.outcome ? 0 : a.outcome === 'fail' ? -1 : 1) || IMPACT_ORDER[a.impact] - IMPACT_ORDER[b.impact]);
-  return buildReport({ doc, win, config, findings, errors, partial, duration: (win.performance || Date).now() - t0 });
+  return buildReport({ doc, win, config, findings, errors, partial, duration: now() - t0, timings });
 }
 
-export function buildReport({ doc, win, config, findings, errors = [], partial = false, duration = 0 }) {
+export function buildReport({ doc, win, config, findings, errors = [], partial = false, duration = 0, timings }) {
   const bySC = {};
   for (const f of findings) for (const sc of f.sc) (bySC[sc] ||= { fail: 0, review: 0, fixed: 0 })[f.outcome]++;
   for (const f of findings) if (f.fixed) for (const sc of f.sc) bySC[sc].fixed++;
@@ -118,6 +124,7 @@ export function buildReport({ doc, win, config, findings, errors = [], partial =
   });
   const count = (o) => findings.filter((f) => f.outcome === o).length;
   const report = {
+    /** Хэвлэх үед хэрэглэгчийн баталгаажуулалт: Node агуулаагүй */
     tool: { name: 'hurteemj', version: '__VERSION__' },
     standard: 'WCAG 2.2 (ISO/IEC 40500)',
     level: config.level,
@@ -126,10 +133,14 @@ export function buildReport({ doc, win, config, findings, errors = [], partial =
     timestamp: new Date().toISOString(),
     partial,
     durationMs: Math.round(duration),
+    /** Дүрэм бүрийн хугацаа (ms) — гүйцэтгэлийн оношилгоонд */
+    timings: timings || null,
     summary: {
       fail: count('fail'),
       review: count('review'),
       fixed: findings.filter((f) => f.fixed).length,
+      /** Засагдаагүй үлдсэн зөрчил */
+      remaining: findings.filter((f) => f.outcome === 'fail' && !f.fixed).length,
       byImpact: Object.fromEntries(['critical', 'serious', 'moderate', 'minor'].map((i) => [i, findings.filter((f) => f.impact === i && f.outcome === 'fail' && !f.fixed).length])),
       criteria: {
         total: criteria.length,
@@ -151,18 +162,50 @@ export function buildReport({ doc, win, config, findings, errors = [], partial =
   return report;
 }
 
+const isNode = (v) => !!v && typeof v === 'object' && typeof v.nodeType === 'number';
+
+/** data доторх DOM node-уудыг (жишээ нь container) хаяж, JSON-д тохирох хэлбэр */
+function cleanData(data) {
+  if (!data || typeof data !== 'object') return data;
+  const out = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (isNode(v) || typeof v === 'function') continue;
+    out[k] = Array.isArray(v) ? v.filter((x) => !isNode(x)) : v;
+  }
+  return out;
+}
+
 export function serialize(report, lang) {
-  const pick = (msg) => (lang ? msg?.[lang] : msg);
+  const pick = (msg) => (lang ? (msg?.[lang] ?? msg?.en) : msg);
   return {
     ...report,
-    findings: report.findings.map(({ node, message, fix, ...f }) => ({ ...f, message: pick(message), fix: fix ? pick(fix) : null })),
+    findings: report.findings.map(({ node, message, fix, data, ...f }) => ({ ...f, data: cleanData(data), message: pick(message), fix: fix ? pick(fix) : null })),
   };
+}
+
+/**
+ * Хэсэгчилсэн аудитын үр дүнг өмнөх тайлантай нэгтгэнэ:
+ * устсан node-ын олдворыг хаяж, ижил (дүрэм, node) олдворыг давхардуулахгүй.
+ */
+export function mergeFindings(previous, next) {
+  const alive = previous.filter((f) => !f.node || f.node.isConnected);
+  const key = (f) => `${f.ruleId}|${f.selector || ''}`;
+  const seen = new Set(alive.map(key));
+  const byKey = new Map(alive.map((f) => [key(f), f]));
+  for (const f of next) {
+    const k = key(f);
+    if (!seen.has(k)) { alive.push(f); seen.add(k); continue; }
+    // Шинэ үр дүн илүү шинэ төлөвтэй (жишээ нь засагдсан) тул хуучныг орлуулна
+    const old = byKey.get(k);
+    if (old && (f.fixed || old.outcome !== f.outcome)) alive[alive.indexOf(old)] = f;
+  }
+  return alive;
 }
 
 /** Тайланд бичигдсэн олдворуудад засвар хэрэглэнэ */
 export async function applyFixes(report, { doc, win, config, runtime, changes, pageLang, onlyIds }) {
   const globalTier = config.fix === true ? 'safe' : config.fix;
-  const ctxBase = { doc, win, config, level: config.level, runtime, changes, pageLang: pageLang || (doc.documentElement.lang || 'mn').split('-')[0] };
+  const ctxBase = { doc, win, config, level: config.level, runtime, changes, pageLang: pageLang || (doc.documentElement.lang || config.lang || 'en').split('-')[0].toLowerCase() };
   const onceDone = new Map();
   let fixed = 0;
   for (const f of report.findings) {
@@ -188,6 +231,7 @@ export async function applyFixes(report, { doc, win, config, runtime, changes, p
     }
   }
   report.summary.fixed = report.findings.filter((x) => x.fixed).length;
+  report.summary.remaining = report.findings.filter((x) => x.outcome === 'fail' && !x.fixed).length;
   for (const k of Object.keys(report.summary.byImpact)) {
     report.summary.byImpact[k] = report.findings.filter((x) => x.impact === k && x.outcome === 'fail' && !x.fixed).length;
   }

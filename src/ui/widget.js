@@ -73,9 +73,8 @@ export function createWidget({ doc, win, config, prefs, t, getLang, setLang, onA
       ${f.fixed && f.fix ? `<div class="meta">✓ ${esc(f.fix[lang] || f.fix.en)}</div>` : ''}
       ${f.selector ? `<div class="meta"><code>${esc(f.selector)}</code></div><button type="button" class="btn small" data-show="${esc(f.id)}">${esc(t('auditShow'))}<span class="sr"> ${esc(f.sc.join(', '))}</span></button>` : ''}
     </li>`).join('');
-    const unfixedFail = r.findings.filter((f) => f.outcome === 'fail' && !f.fixed).length;
     return `<div class="stats">
-      <div class="stat"><b>${unfixedFail}</b>${esc(t('auditFail'))}</div>
+      <div class="stat"><b>${r.summary.remaining}</b>${esc(t('auditFail'))}</div>
       <div class="stat"><b>${r.summary.review}</b>${esc(t('auditReview'))}</div>
       <div class="stat"><b>${r.summary.fixed}</b>${esc(t('auditFixed'))}</div>
     </div>
@@ -150,10 +149,11 @@ export function createWidget({ doc, win, config, prefs, t, getLang, setLang, onA
     return null;
   }
 
-  function show() {
+  /** @param {Element} [opener] — самбарыг нээсэн хуудасны элемент (data-hurteemj-open) */
+  function show(opener) {
     if (open) return;
     open = true;
-    lastFocus = doc.activeElement;
+    lastFocus = opener || (doc.activeElement && doc.activeElement !== doc.body && !host.contains(doc.activeElement) ? doc.activeElement : null);
     render();
     panel.hidden = false;
     launcher.setAttribute('aria-expanded', 'true');
@@ -164,9 +164,11 @@ export function createWidget({ doc, win, config, prefs, t, getLang, setLang, onA
     open = false;
     panel.hidden = true;
     launcher.setAttribute('aria-expanded', 'false');
-    // Фокусыг нээсэн элемент рүү буцаана (2.4.3)
-    if (lastFocus && lastFocus !== doc.body && lastFocus.isConnected && config.launcher === false) lastFocus.focus();
-    else launcher.focus();
+    // Фокусыг нээхээс өмнө байсан элемент рүү буцаана (ARIA dialog pattern, 2.4.3); байхгүй бол launcher руу
+    const back = lastFocus && lastFocus.isConnected && typeof lastFocus.focus === 'function' ? lastFocus : null;
+    if (back) back.focus();
+    if ((!back || doc.activeElement !== back) && config.launcher !== false) launcher.focus();
+    lastFocus = null;
   }
   const toggle = () => (open ? hide() : show());
 
@@ -228,7 +230,7 @@ export function createWidget({ doc, win, config, prefs, t, getLang, setLang, onA
   doc.addEventListener('keydown', onKey, true);
 
   // Хуудасны [data-hurteemj-open] элементүүд самбарыг нээнэ (өөрийн товчтой интеграц)
-  const onOpenTrigger = (e) => { const tr = e.target.closest?.('[data-hurteemj-open]'); if (tr) { e.preventDefault(); lastFocus = tr; show(); } };
+  const onOpenTrigger = (e) => { const tr = e.target.closest?.('[data-hurteemj-open]'); if (tr) { e.preventDefault(); show(tr); } };
   doc.addEventListener('click', onOpenTrigger);
 
   // Launcher нь фокустай элементийг далдлахаас сэргийлэх (2.4.11)
@@ -317,7 +319,7 @@ export function createWidget({ doc, win, config, prefs, t, getLang, setLang, onA
 
   return {
     host,
-    open: show,
+    open: () => show(),
     close: hide,
     toggle,
     refresh: () => { if (open) rerender(keyOf(shadow.activeElement)); updateGuide(); },

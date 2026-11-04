@@ -53,9 +53,11 @@ test('Зөрчлийн хуудас: WCAG 2.2-ын гол зөрчлүүдийг
     'lang-valid', 'document-title', 'empty-heading', 'list-structure', 'text-spacing-important', 'text-spacing-clip', 'media-autoplay',
     'marquee-blink', 'color-contrast', 'link-in-text-block', 'non-text-contrast', 'autocomplete-valid', 'error-identification',
     'select-auto-navigation', 'focus-visible', 'focus-not-obscured', 'target-size', 'tabindex-positive', 'scrollable-region-focusable',
-    'label-in-name', 'aria-hidden-focus', 'iframe-title', 'nested-interactive', 'dialog-name', 'status-messages', 'required-indicator'];
+    'label-in-name', 'aria-hidden-focus', 'iframe-title', 'nested-interactive', 'dialog-name', 'required-indicator'];
   for (const id of expected) assert.ok(s.fails.includes(id), `илрүүлээгүй: ${id}`);
-  for (const id of ['video-captions', 'heading-order', 'link-purpose', 'table-headers']) assert.ok(s.reviews.includes(id), `review алга: ${id}`);
+  // Хуудас ачаалахад аль хэдийн байсан .toast нь динамик status message биш тул зөвхөн review
+  for (const id of ['video-captions', 'heading-order', 'link-purpose', 'table-headers', 'status-messages']) assert.ok(s.reviews.includes(id), `review алга: ${id}`);
+  assert.ok(!s.fails.includes('status-messages'), 'статик мэдэгдлийг fail гэж үзэх ёсгүй');
   assert.deepEqual(s.errors, []);
   // WCAG 2.2-ын шинэ SC-үүд тайланд тусгагдсан
   const sc = await page.evaluate(() => H.report.criteria.filter((c) => c.new22).map((c) => `${c.id}:${c.status}`));
@@ -66,7 +68,7 @@ test('Зөрчлийн хуудас: WCAG 2.2-ын гол зөрчлүүдийг
 test('Safe засвар зөвхөн эрсдэлгүй засварыг хийнэ, heuristic илүү ихийг', async () => {
   const a = await load('violations.html', { fix: 'safe', lang: 'mn' });
   const sa = await summary(a.page);
-  for (const id of ['meta-viewport', 'html-lang', 'bypass', 'focus-visible', 'focus-not-obscured', 'status-messages', 'link-in-text-block', 'required-indicator']) assert.ok(sa.fixed.includes(id), `safe: ${id}`);
+  for (const id of ['meta-viewport', 'html-lang', 'bypass', 'focus-visible', 'focus-not-obscured', 'link-in-text-block', 'required-indicator']) assert.ok(sa.fixed.includes(id), `safe: ${id}`);
   for (const id of ['color-contrast', 'button-name', 'target-size', 'click-without-keyboard']) assert.ok(!sa.fixed.includes(id), `safe горимд хийх ёсгүй: ${id}`);
   const lang = await a.page.evaluate(() => document.documentElement.lang);
   assert.equal(lang, 'mn');
@@ -95,8 +97,10 @@ test('revert() бүх засварыг буцааж DOM-ыг анхны байд
   const { page, ctx } = await load('violations.html', { fix: false, widget: false });
   // Атрибутын дарааллаас үл хамаарах каноник хэлбэр
   const canon = () => page.evaluate(() => {
+    // style атрибутыг CSSOM-оор нормчилно ("20px !important" ↔ "20px !important;" ижил утгатай)
+    const attr = (n, a) => (a.name === 'style' ? n.style.cssText : a.value);
     const walk = (n) => n.nodeType === 3 ? n.textContent : n.nodeType !== 1 || n.hasAttribute('data-hurteemj-ui') ? '' :
-      `<${n.localName}${[...n.attributes].map((a) => ` ${a.name}="${a.value}"`).sort().join('')}>${[...n.childNodes].map(walk).join('')}</${n.localName}>`;
+      `<${n.localName}${[...n.attributes].map((a) => ` ${a.name}="${attr(n, a)}"`).sort().join('')}>${[...n.childNodes].map(walk).join('')}</${n.localName}>`;
     return walk(document.body);
   });
   const before = await canon();
