@@ -15,7 +15,7 @@
 | **1. Аудит** | 65 дүрэм, WCAG 2.2-ын 86 шалгуурын 47-д нь автомат шалгалттай. 9 шинэ шалгуурын 7-г хамардаг: Focus Not Obscured, Target Size 24px (spacing exception-тэй), Accessible Authentication (бодит paste туршилт), Consistent Help, Dragging Movements, Focus Appearance. Үр дүнг `fail` ба `review` гэж ялгана |
 | **2. Засвар** | `safe` горим: lang, viewport zoom, skip link, 2.4.13 фокусын тойм, sticky header-ийн ард фокус далдлагдахаас хамгаалах, `role=status`, `aria-required` г.м. `heuristic` горим: icon-оос нэр таах, брэндийн өнгийг хадгалсан тодролын засвар, `div[onclick]`-т гарын дэмжлэг. Бүх засвар бүртгэгдэж, `revert()`-оор буцаагдана |
 | **3. Хэрэглэгчийн самбар** | Текстийн хэмжээ, 1.4.12 текстийн зай, уншихад хялбар фонт, 4 тодролын горим, ханалт, хөдөлгөөн/GIF зогсоох, фокус тодруулах, том курсор, товч томруулах, уншлагын шугам/маск, TTS. 6 бэлэн профайлтай. Самбар өөрөө WCAG 2.2 AA-г хангаж, axe-core-оор шалгагддаг |
-| **4. Тайлан** | Самбар доторх хөгжүүлэгчийн тайлан, JSON экспорт, `reportEndpoint` мониторинг, CLI (text/json/html/md), CI-д exit code |
+| **4. Тайлан** | Самбар доторх хөгжүүлэгчийн тайлан, JSON экспорт, **EARL/JSON-LD** (W3C ACT Rules-тэй уялдсан — 38 дүрэм 53 ACT дүрэмтэй холбогдсон), `reportEndpoint` мониторинг, CLI (text/json/html/md/earl), CI-д exit code |
 
 ## Хурдан эхлэх
 
@@ -35,6 +35,7 @@ const hj = init({ level: 'AA', fix: 'safe', uiLang: 'mn', statementUrl: '/access
 
 ```bash
 npx hurteemj-audit https://example.mn --fail-on serious --format html --out report.html
+npx hurteemj-audit https://example.mn --format earl --out report.earl.json   # W3C EARL / ACT
 ```
 
 ## Интеграц
@@ -49,7 +50,8 @@ npx hurteemj-audit https://example.mn --fail-on serious --format html --out repo
 | `api.audit({ deep })` | Дахин шалгаж тайлан буцаана |
 | `api.fix({ tier, ids })` | Засвар хэрэглэнэ |
 | `api.revert(ruleId?)` | Засварыг буцаана |
-| `api.report` / `api.toJSON()` | Сүүлийн тайлан. `summary.remaining` = засагдаагүй үлдсэн зөрчил |
+| `api.report` / `api.toJSON()` | Сүүлийн тайлан. `summary.remaining` = засагдаагүй үлдсэн зөрчил, `summary.generated` = AI-аар үүсгэсэн (баталгаажуулах) засвар |
+| `api.toEARL()` | W3C EARL JSON-LD тайлан (ACT Rules URL-ууд, `earl:passed/failed/cantTell/inapplicable/untested`) |
 | `api.config.warnings` | Буруу тохиргооны утгууд (анхдагч руу буцаасан) |
 | `api.language` / `api.setLanguage(l)` | Самбарын хэл |
 | `api.prefs.get/set/reset/applyProfile` | Хэрэглэгчийн тохиргоо |
@@ -76,7 +78,9 @@ init({
     'target-size': { impact: 'minor' },       // нөлөөллийг өөрчлөх
   },
   ignore: ['.ads', '#third-party-chat'],
-  altTextProvider: async (src, img, lang) => myCaptionApi(src, lang), // AI alt (хүн хянах)
+  altTextProvider: async (src, img, lang) => myCaptionApi(src, lang), // AI alt → тайланд "generated", хүн баталгаажуулна
+  loadPrefs: async () => (await fetch('/api/me/a11y')).json(),          // серверээс тохиргоо (onPrefsChange-тэй хослоно)
+  fetchStyles: true,                   // CDN дээрх CSS-ийн :focus дүрмийг татаж шалгах (2.4.7)
   reportEndpoint: '/api/a11y', reportSampleRate: 0.2,
   storage: 'cookie', cookieDomain: '.gov.mn',  // дэд домэйн хооронд тохиргоо хуваалцах
   profiles: ['lowVision', 'dyslexia', 'seizure'],
@@ -91,6 +95,9 @@ init({
 src/
   wcag/criteria.js     WCAG 2.2-ын 86 SC (mn/en, түвшин, автоматжилт)
   wcag/aria.js         WAI-ARIA 1.2 өгөгдөл
+  wcag/act.js          W3C ACT Rules уялдаа (дүрэм → ACT id)
+  core/earl.js         EARL / JSON-LD тайлан
+  core/stylesheets.js  CORS-оор хаалттай гадны CSS-ийг fetch-ээр задлах
   rules/*.js           65 дүрэм (structure, media, contrast, forms, interaction, aria)
   core/engine.js       аудит, засвар, тайлан, олдвор нэгтгэх
   core/config.js       анхдагч тохиргоо, data-* уншилт, шалгалт (normalizeConfig)

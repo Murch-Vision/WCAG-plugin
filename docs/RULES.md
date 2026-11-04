@@ -4,73 +4,75 @@
 
 ## Дүрмүүд (65)
 
-| Дүрэм | SC | Нөлөө | Автомат засвар | Тэмдэглэл |
-|---|---|---|---|---|
-| `html-lang` | 3.1.1 | serious | ✅ safe | хуудасны түвшин |
-| `lang-valid` | 3.1.2 | serious | — | элемент бүр |
-| `lang-of-parts` | 3.1.2 | moderate | 🟡 heuristic | элемент бүр |
-| `document-title` | 2.4.2 | serious | 🟡 heuristic | хуудасны түвшин |
-| `heading-order` | 1.3.1, 2.4.6 | moderate | — | хуудасны түвшин |
-| `empty-heading` | 1.3.1, 2.4.6 | serious | ✅ safe | элемент бүр |
-| `list-structure` | 1.3.1 | serious | — | элемент бүр |
-| `table-headers` | 1.3.1 | serious | — | элемент бүр |
-| `landmark-main` | 1.3.1, 2.4.1 | moderate | 🟡 heuristic | хуудасны түвшин |
-| `bypass` | 2.4.1 | serious | ✅ safe | хуудасны түвшин |
-| `meta-viewport` | 1.4.4, 1.4.10 | critical | ✅ safe | элемент бүр |
-| `meta-refresh` | 2.2.1, 3.2.5 | critical | — | элемент бүр |
-| `text-spacing-important` | 1.4.12 | serious | ✅ safe | элемент бүр |
-| `text-spacing-clip` | 1.4.12 | serious | — | deep (DOM-ыг түр өөрчилнө) |
-| `reflow` | 1.4.10 | serious | — | хуудасны түвшин |
-| `image-alt` | 1.1.1 | critical | ✅ safe | элемент бүр |
-| `image-alt-quality` | 1.1.1 | serious | 🟡 heuristic | элемент бүр |
-| `svg-img-name` | 1.1.1 | serious | ✅ safe | элемент бүр |
-| `input-image-alt` | 1.1.1, 4.1.2 | critical | — | элемент бүр |
-| `area-alt` | 1.1.1, 2.4.4 | critical | — | элемент бүр |
-| `object-alt` | 1.1.1 | serious | — | элемент бүр |
-| `video-captions` | 1.2.2, 1.2.4 | critical | — | элемент бүр |
-| `media-alternative` | 1.2.1, 1.2.3, 1.2.5 | serious | — | элемент бүр |
-| `media-autoplay` | 1.4.2, 2.2.2 | serious | ✅ safe | элемент бүр |
-| `marquee-blink` | 2.2.2 | serious | ✅ safe | элемент бүр |
-| `image-of-text-hint` | 1.4.5 | moderate | — | элемент бүр |
-| `color-contrast` | 1.4.3, 1.4.6 | serious | 🟡 heuristic | элемент бүр |
-| `link-in-text-block` | 1.4.1 | serious | ✅ safe | элемент бүр |
-| `non-text-contrast` | 1.4.11 | serious | 🟡 heuristic | элемент бүр |
-| `label` | 1.3.1, 3.3.2, 4.1.2 | critical | ✅ safe | элемент бүр |
-| `autocomplete-valid` | 1.3.5 | serious | — | элемент бүр |
-| `autocomplete-purpose` | 1.3.5 | moderate | 🟡 heuristic | элемент бүр |
-| `required-indicator` | 3.3.2, 1.3.1 | moderate | ✅ safe | элемент бүр |
-| `error-identification` | 3.3.1, 3.3.3 | serious | 🟡 heuristic | элемент бүр |
-| `accessible-auth-paste` | 3.3.8 | critical | 🟡 heuristic | элемент бүр |
-| `accessible-auth-autocomplete` | 3.3.8, 1.3.5 | serious | ✅ safe | элемент бүр |
-| `captcha-alternative` | 3.3.8, 1.1.1 | serious | — | хуудасны түвшин |
-| `select-auto-navigation` | 3.2.2 | serious | — | элемент бүр |
-| `fieldset-group` | 1.3.1, 3.3.2 | moderate | — | хуудасны түвшин |
-| `focus-visible` | 2.4.7, 2.4.13 | serious | ✅ safe | хуудасны түвшин |
-| `focus-not-obscured` | 2.4.11, 2.4.12 | serious | ✅ safe | хуудасны түвшин |
-| `target-size` | 2.5.8, 2.5.5 | serious | 🟡 heuristic | хуудасны түвшин |
-| `tabindex-positive` | 2.4.3 | serious | 🟡 heuristic | элемент бүр |
-| `scrollable-region-focusable` | 2.1.1 | serious | ✅ safe | элемент бүр |
-| `click-without-keyboard` | 2.1.1, 4.1.2 | critical | 🟡 heuristic | элемент бүр |
-| `motion-animation` | 2.2.2, 2.3.3 | moderate | — | хуудасны түвшин |
-| `dragging-alternative` | 2.5.7 | serious | — | элемент бүр |
-| `consistent-help` | 3.2.6 | moderate | — | хуудасны түвшин |
-| `accesskey-unique` | 2.1.4, 4.1.2 | moderate | — | хуудасны түвшин |
-| `button-name` | 4.1.2 | critical | 🟡 heuristic | элемент бүр |
-| `link-name` | 2.4.4, 4.1.2 | critical | 🟡 heuristic | элемент бүр |
-| `link-purpose` | 2.4.4, 2.4.9 | moderate | 🟡 heuristic | элемент бүр |
-| `label-in-name` | 2.5.3 | serious | 🟡 heuristic | элемент бүр |
-| `aria-valid-role` | 4.1.2, 1.3.1 | critical | — | элемент бүр |
-| `aria-valid-attr` | 4.1.2 | critical | ✅ safe | хуудасны түвшин |
-| `aria-required-attr` | 4.1.2 | critical | 🟡 heuristic | элемент бүр |
-| `aria-idrefs` | 1.3.1, 4.1.2 | serious | — | элемент бүр |
-| `duplicate-id-aria` | 4.1.2, 1.3.1 | serious | — | хуудасны түвшин |
-| `aria-hidden-focus` | 4.1.2, 1.3.1 | serious | 🟡 heuristic | элемент бүр |
-| `aria-name-required` | 4.1.2 | serious | — | элемент бүр |
-| `iframe-title` | 4.1.2, 2.4.1 | serious | 🟡 heuristic | элемент бүр |
-| `nested-interactive` | 4.1.2 | serious | — | элемент бүр |
-| `dialog-name` | 4.1.2 | serious | ✅ safe | элемент бүр |
-| `status-messages` | 4.1.3 | serious | ✅ safe | элемент бүр |
-| `presentation-role-conflict` | 4.1.2 | moderate | — | элемент бүр |
+| Дүрэм | SC | ACT Rules | Нөлөө | Автомат засвар | Тэмдэглэл |
+|---|---|---|---|---|---|
+| `html-lang` | 3.1.1 | [b5c3f8](https://www.w3.org/WAI/standards-guidelines/act/rules/b5c3f8/), [bf051a](https://www.w3.org/WAI/standards-guidelines/act/rules/bf051a/), [ucwvc8](https://www.w3.org/WAI/standards-guidelines/act/rules/ucwvc8/) | serious | ✅ safe | хуудасны түвшин |
+| `lang-valid` | 3.1.2 | [de46e4](https://www.w3.org/WAI/standards-guidelines/act/rules/de46e4/) | serious | — | элемент бүр |
+| `lang-of-parts` | 3.1.2 | — | moderate | 🟡 heuristic (review-д ч) | элемент бүр |
+| `document-title` | 2.4.2 | [2779a5](https://www.w3.org/WAI/standards-guidelines/act/rules/2779a5/), [c4a8a4](https://www.w3.org/WAI/standards-guidelines/act/rules/c4a8a4/) | serious | 🟡 heuristic | хуудасны түвшин |
+| `heading-order` | 1.3.1, 2.4.6 | — | moderate | — | хуудасны түвшин |
+| `empty-heading` | 1.3.1, 2.4.6 | [ffd0e9](https://www.w3.org/WAI/standards-guidelines/act/rules/ffd0e9/) | serious | ✅ safe | элемент бүр |
+| `list-structure` | 1.3.1 | — | serious | — | элемент бүр |
+| `table-headers` | 1.3.1 | — | serious | — | элемент бүр |
+| `landmark-main` | 1.3.1, 2.4.1 | [b40fd1](https://www.w3.org/WAI/standards-guidelines/act/rules/b40fd1/) | moderate | 🟡 heuristic (review-д ч) | хуудасны түвшин |
+| `bypass` | 2.4.1 | [cf77f2](https://www.w3.org/WAI/standards-guidelines/act/rules/cf77f2/), [ye5d6e](https://www.w3.org/WAI/standards-guidelines/act/rules/ye5d6e/) | serious | ✅ safe (review-д ч) | хуудасны түвшин |
+| `meta-viewport` | 1.4.4, 1.4.10 | [b4f0c3](https://www.w3.org/WAI/standards-guidelines/act/rules/b4f0c3/) | critical | ✅ safe | элемент бүр |
+| `meta-refresh` | 2.2.1, 3.2.5 | [bc659a](https://www.w3.org/WAI/standards-guidelines/act/rules/bc659a/), [bisz58](https://www.w3.org/WAI/standards-guidelines/act/rules/bisz58/) | critical | — | элемент бүр |
+| `text-spacing-important` | 1.4.12 | [24afc2](https://www.w3.org/WAI/standards-guidelines/act/rules/24afc2/), [78fd32](https://www.w3.org/WAI/standards-guidelines/act/rules/78fd32/), [9e45ec](https://www.w3.org/WAI/standards-guidelines/act/rules/9e45ec/) | serious | ✅ safe | элемент бүр |
+| `text-spacing-clip` | 1.4.12 | — | serious | — | deep (DOM-ыг түр өөрчилнө) |
+| `reflow` | 1.4.10 | — | serious | — | хуудасны түвшин |
+| `image-alt` | 1.1.1 | [23a2a8](https://www.w3.org/WAI/standards-guidelines/act/rules/23a2a8/) | critical | ✅ safe | элемент бүр |
+| `image-alt-quality` | 1.1.1 | [9eb3f6](https://www.w3.org/WAI/standards-guidelines/act/rules/9eb3f6/), [qt1vmo](https://www.w3.org/WAI/standards-guidelines/act/rules/qt1vmo/) | serious | 🟡 heuristic | элемент бүр |
+| `svg-img-name` | 1.1.1 | [7d6734](https://www.w3.org/WAI/standards-guidelines/act/rules/7d6734/) | serious | ✅ safe (review-д ч) | элемент бүр |
+| `input-image-alt` | 1.1.1, 4.1.2 | [59796f](https://www.w3.org/WAI/standards-guidelines/act/rules/59796f/) | critical | — | элемент бүр |
+| `area-alt` | 1.1.1, 2.4.4 | — | critical | — | элемент бүр |
+| `object-alt` | 1.1.1 | [8fc3b6](https://www.w3.org/WAI/standards-guidelines/act/rules/8fc3b6/) | serious | — | элемент бүр |
+| `video-captions` | 1.2.2, 1.2.4 | [f51b46](https://www.w3.org/WAI/standards-guidelines/act/rules/f51b46/), [eac66b](https://www.w3.org/WAI/standards-guidelines/act/rules/eac66b/) | critical | — | элемент бүр |
+| `media-alternative` | 1.2.1, 1.2.3, 1.2.5 | [1a02b0](https://www.w3.org/WAI/standards-guidelines/act/rules/1a02b0/), [c5a4ea](https://www.w3.org/WAI/standards-guidelines/act/rules/c5a4ea/), [2eb176](https://www.w3.org/WAI/standards-guidelines/act/rules/2eb176/), [e7aa44](https://www.w3.org/WAI/standards-guidelines/act/rules/e7aa44/) | serious | — | элемент бүр |
+| `media-autoplay` | 1.4.2, 2.2.2 | [80f0bf](https://www.w3.org/WAI/standards-guidelines/act/rules/80f0bf/), [4c31df](https://www.w3.org/WAI/standards-guidelines/act/rules/4c31df/) | serious | ✅ safe | элемент бүр |
+| `marquee-blink` | 2.2.2 | [efbfc7](https://www.w3.org/WAI/standards-guidelines/act/rules/efbfc7/) | serious | ✅ safe | элемент бүр |
+| `image-of-text-hint` | 1.4.5 | — | moderate | — | элемент бүр |
+| `color-contrast` | 1.4.3, 1.4.6 | [afw4f7](https://www.w3.org/WAI/standards-guidelines/act/rules/afw4f7/), [09o5cg](https://www.w3.org/WAI/standards-guidelines/act/rules/09o5cg/) | serious | 🟡 heuristic | элемент бүр |
+| `link-in-text-block` | 1.4.1 | — | serious | ✅ safe | элемент бүр |
+| `non-text-contrast` | 1.4.11 | — | serious | 🟡 heuristic | элемент бүр |
+| `label` | 1.3.1, 3.3.2, 4.1.2 | [e086e5](https://www.w3.org/WAI/standards-guidelines/act/rules/e086e5/) | critical | ✅ safe | элемент бүр |
+| `autocomplete-valid` | 1.3.5 | [73f2c2](https://www.w3.org/WAI/standards-guidelines/act/rules/73f2c2/) | serious | — | элемент бүр |
+| `autocomplete-purpose` | 1.3.5 | — | moderate | 🟡 heuristic (review-д ч) | элемент бүр |
+| `required-indicator` | 3.3.2, 1.3.1 | — | moderate | ✅ safe | элемент бүр |
+| `error-identification` | 3.3.1, 3.3.3 | [36b590](https://www.w3.org/WAI/standards-guidelines/act/rules/36b590/) | serious | 🟡 heuristic | элемент бүр |
+| `accessible-auth-paste` | 3.3.8 | — | critical | 🟡 heuristic | элемент бүр |
+| `accessible-auth-autocomplete` | 3.3.8, 1.3.5 | — | serious | ✅ safe (review-д ч) | элемент бүр |
+| `captcha-alternative` | 3.3.8, 1.1.1 | — | serious | — | хуудасны түвшин |
+| `select-auto-navigation` | 3.2.2 | — | serious | — | элемент бүр |
+| `fieldset-group` | 1.3.1, 3.3.2 | — | moderate | — | хуудасны түвшин |
+| `focus-visible` | 2.4.7, 2.4.13 | [oj04fd](https://www.w3.org/WAI/standards-guidelines/act/rules/oj04fd/) | serious | ✅ safe | хуудасны түвшин |
+| `focus-not-obscured` | 2.4.11, 2.4.12 | — | serious | ✅ safe | хуудасны түвшин |
+| `target-size` | 2.5.8, 2.5.5 | — | serious | 🟡 heuristic | хуудасны түвшин |
+| `tabindex-positive` | 2.4.3 | — | serious | 🟡 heuristic | элемент бүр |
+| `scrollable-region-focusable` | 2.1.1 | [0ssw9k](https://www.w3.org/WAI/standards-guidelines/act/rules/0ssw9k/) | serious | ✅ safe | элемент бүр |
+| `click-without-keyboard` | 2.1.1, 4.1.2 | — | critical | 🟡 heuristic | элемент бүр |
+| `motion-animation` | 2.2.2, 2.3.3 | — | moderate | — | хуудасны түвшин |
+| `dragging-alternative` | 2.5.7 | — | serious | — | элемент бүр |
+| `consistent-help` | 3.2.6 | — | moderate | — | хуудасны түвшин |
+| `accesskey-unique` | 2.1.4, 4.1.2 | — | moderate | — | хуудасны түвшин |
+| `button-name` | 4.1.2 | [97a4e1](https://www.w3.org/WAI/standards-guidelines/act/rules/97a4e1/) | critical | 🟡 heuristic | элемент бүр |
+| `link-name` | 2.4.4, 4.1.2 | [c487ae](https://www.w3.org/WAI/standards-guidelines/act/rules/c487ae/) | critical | 🟡 heuristic | элемент бүр |
+| `link-purpose` | 2.4.4, 2.4.9 | [aizyf1](https://www.w3.org/WAI/standards-guidelines/act/rules/aizyf1/), [5effbb](https://www.w3.org/WAI/standards-guidelines/act/rules/5effbb/) | moderate | 🟡 heuristic (review-д ч) | элемент бүр |
+| `label-in-name` | 2.5.3 | [2ee8b8](https://www.w3.org/WAI/standards-guidelines/act/rules/2ee8b8/) | serious | 🟡 heuristic | элемент бүр |
+| `aria-valid-role` | 4.1.2, 1.3.1 | [674b10](https://www.w3.org/WAI/standards-guidelines/act/rules/674b10/) | critical | — | элемент бүр |
+| `aria-valid-attr` | 4.1.2 | [5f99a7](https://www.w3.org/WAI/standards-guidelines/act/rules/5f99a7/), [6a7281](https://www.w3.org/WAI/standards-guidelines/act/rules/6a7281/) | critical | ✅ safe | хуудасны түвшин |
+| `aria-required-attr` | 4.1.2 | [4e8ab6](https://www.w3.org/WAI/standards-guidelines/act/rules/4e8ab6/) | critical | 🟡 heuristic | элемент бүр |
+| `aria-idrefs` | 1.3.1, 4.1.2 | [in6db8](https://www.w3.org/WAI/standards-guidelines/act/rules/in6db8/) | serious | — | элемент бүр |
+| `duplicate-id-aria` | 4.1.2, 1.3.1 | [3ea0c8](https://www.w3.org/WAI/standards-guidelines/act/rules/3ea0c8/) | serious | — | хуудасны түвшин |
+| `aria-hidden-focus` | 4.1.2, 1.3.1 | [6cfa84](https://www.w3.org/WAI/standards-guidelines/act/rules/6cfa84/) | serious | 🟡 heuristic | элемент бүр |
+| `aria-name-required` | 4.1.2 | [m6b1q3](https://www.w3.org/WAI/standards-guidelines/act/rules/m6b1q3/) | serious | — | элемент бүр |
+| `iframe-title` | 4.1.2, 2.4.1 | [cae760](https://www.w3.org/WAI/standards-guidelines/act/rules/cae760/) | serious | 🟡 heuristic | элемент бүр |
+| `nested-interactive` | 4.1.2 | [307n5z](https://www.w3.org/WAI/standards-guidelines/act/rules/307n5z/) | serious | — | элемент бүр |
+| `dialog-name` | 4.1.2 | — | serious | ✅ safe | элемент бүр |
+| `status-messages` | 4.1.3 | — | serious | ✅ safe | элемент бүр |
+| `presentation-role-conflict` | 4.1.2 | [46ca7f](https://www.w3.org/WAI/standards-guidelines/act/rules/46ca7f/) | moderate | — | элемент бүр |
+
+38/65 дүрэм W3C ACT Rules-тэй уялдсан (EARL тайланд `test` болгон ашиглана; ACT дүрмийг бүрэн хэрэгжүүлсэн гэсэн баталгаа биш).
 
 ## WCAG 2.2-ын 86 шалгуур
 

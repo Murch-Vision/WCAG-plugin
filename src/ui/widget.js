@@ -67,7 +67,7 @@ export function createWidget({ doc, win, config, prefs, t, getLang, setLang, onA
     if (!r) return `<p class="note">…</p>`;
     const lang = getLang();
     const items = r.findings.slice(0, 60).map((f) => `<li>
-      <span class="badge ${f.fixed ? 'b-fixed' : f.outcome === 'fail' ? 'b-fail' : 'b-review'}">${esc(f.fixed ? t('auditFixed') : f.outcome === 'fail' ? t('auditFail') : t('auditReview'))}</span>
+      <span class="badge ${f.generated ? 'b-review' : f.fixed ? 'b-fixed' : f.outcome === 'fail' ? 'b-fail' : 'b-review'}">${esc(f.generated ? t('auditGenerated') : f.fixed ? t('auditFixed') : f.outcome === 'fail' ? t('auditFail') : t('auditReview'))}</span>
       <strong>${esc(f.sc.join(', '))}</strong> · ${esc(f.impact)}
       <div>${esc(messageText(f, lang))}</div>
       ${f.fixed && f.fix ? `<div class="meta">✓ ${esc(f.fix[lang] || f.fix.en)}</div>` : ''}

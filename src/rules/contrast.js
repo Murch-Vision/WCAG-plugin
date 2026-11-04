@@ -23,7 +23,32 @@ function gradientColors(bgImage) {
  * Элементийн ард харагдах өнгийг тодорхойлно.
  * Буцаах: { color } | { colors:[...] } (gradient) | { unknown: reason }
  */
-export function backgroundOf(el) {
+const MEDIA_TAGS = /^(img|video|canvas|picture|svg|iframe|object|embed)$/;
+
+/**
+ * @param {Element} el
+ * @param {WeakMap} [cache] — аудит бүрийн кэш (ctx.bgCache). Өөрийн дэвсгэргүй элемент эцгийнхээ
+ *   нэг өнгийн ("solid") дэвсгэрийг өвлөнө — элемент бүрт hit-test хийхгүй тул 3–5 дахин хурдан.
+ */
+export function backgroundOf(el, cache) {
+  if (cache?.has(el)) return cache.get(el);
+  let res;
+  const parent = el.parentElement;
+  if (cache && parent && !MEDIA_TAGS.test(el.localName)) {
+    const own = getComputedStyle(el);
+    const transparent = (!own.backgroundImage || own.backgroundImage === 'none') && (parseColor(own.backgroundColor)?.[3] ?? 1) === 0;
+    if (transparent) {
+      // Эцгийг (шаардлагатай бол дээшээ рекурсивээр) нэг л удаа тооцно
+      const pr = backgroundOf(parent, cache);
+      if (pr.solid) res = pr;
+    }
+  }
+  if (!res) res = computeBackground(el);
+  cache?.set(el, res);
+  return res;
+}
+
+function computeBackground(el) {
   const doc = el.ownerDocument;
   const win = doc.defaultView || window;
   const r = el.getBoundingClientRect();
@@ -64,10 +89,10 @@ export function backgroundOf(el) {
       if (bg[3] >= 1) break;
     }
   }
-  // Дээрээс доош (layers[0] нь хамгийн дээд давхарга) холих
+  // Дээрээс доош (layers[0] нь хамгийн дээд давхарга) холих; эцсийн дүн үргэлж тунгалаг бус нэг өнгө (canvas = цагаан)
   let base = WHITE;
   for (let i = layers.length - 1; i >= 0; i--) base = blend(layers[i], base);
-  return { color: base };
+  return { color: base, solid: true };
 }
 
 function isLargeText(s) {
@@ -99,7 +124,7 @@ export default [
       if (s.visibility !== 'visible' || parseFloat(s.fontSize) === 0) return null;
       if (/^(transparent|rgba\(0, 0, 0, 0\))$/.test(s.color)) return null;
       let fg = parseColor(s.color);
-      const bgInfo = backgroundOf(el);
+      const bgInfo = backgroundOf(el, ctx.bgCache);
       const large = isLargeText(s);
       const aaa = ctx.level === 'AAA';
       const need = aaa ? (large ? 4.5 : 7) : large ? 3 : 4.5;
@@ -138,7 +163,7 @@ export default [
     sc: ['1.4.1'],
     impact: 'serious',
     selector: 'p a[href], li a[href], td a[href], dd a[href], blockquote a[href]',
-    evaluate(el) {
+    evaluate(el, ctx) {
       const s = getComputedStyle(el);
       if (s.display !== 'inline' || !isVisible(el)) return null;
       const block = el.parentElement.closest('p, li, td, dd, blockquote');
@@ -153,7 +178,7 @@ export default [
       if ((s.boxShadow && s.boxShadow !== 'none') || (s.backgroundImage && s.backgroundImage !== 'none')) return null;
       const ps = getComputedStyle(block);
       if (parseInt(s.fontWeight, 10) - parseInt(ps.fontWeight, 10) >= 300 || s.fontStyle !== ps.fontStyle) return null;
-      const bg = backgroundOf(el);
+      const bg = backgroundOf(el, ctx.bgCache);
       if (bg.unknown) return null;
       if (s.backgroundColor !== ps.backgroundColor && parseColor(s.backgroundColor)?.[3] > 0) return null;
       const lc = parseColor(s.color), tc = parseColor(ps.color);
@@ -179,12 +204,12 @@ export default [
     sc: ['1.4.11'],
     impact: 'serious',
     selector: 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select, textarea',
-    evaluate(el) {
+    evaluate(el, ctx) {
       if (!isVisible(el) || isDisabled(el)) return null;
       const s = getComputedStyle(el);
       // box-shadow "ring" (Material/Tailwind) эсвэл outline нь хил хязгаар болно — өнгийг нь найдвартай задлах боломжгүй тул хангасан гэж үзнэ
       if ((s.boxShadow && s.boxShadow !== 'none') || (s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0)) return null;
-      const outer = backgroundOf(el.parentElement || el);
+      const outer = backgroundOf(el.parentElement || el, ctx.bgCache);
       if (outer.unknown || outer.gradient) return null;
       const around = outer.color;
       const field = parseColor(s.backgroundColor);

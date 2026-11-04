@@ -17,7 +17,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const BUNDLE = path.join(here, '..', 'dist', 'hurteemj.js');
 
 function parseArgs(argv) {
-  const o = { urls: [], level: 'AA', format: 'text', failOn: 'serious', viewport: '1280x800', deep: true, lang: 'mn', fix: false, wait: 500 };
+  const o = { urls: [], level: 'AA', format: 'text', failOn: 'serious', viewport: '1280x800', deep: true, lang: 'mn', fix: false, wait: 500, fetchStyles: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -27,6 +27,7 @@ function parseArgs(argv) {
     else if (a === '--fail-on') o.failOn = next();
     else if (a === '--viewport') o.viewport = next();
     else if (a === '--no-deep') o.deep = false;
+    else if (a === '--no-fetch-styles') o.fetchStyles = false;
     else if (a === '--lang') o.lang = next();
     else if (a === '--fix') o.fix = /^(safe|heuristic)$/.test(argv[i + 1] || '') ? argv[++i] : 'safe';
     else if (a === '--wait') o.wait = +next();
@@ -36,6 +37,7 @@ function parseArgs(argv) {
     else o.urls.push(a);
   }
   if (!['A', 'AA', 'AAA'].includes(o.level)) { console.error(`--level нь A|AA|AAA байх ёстой (${o.level})`); o.badArg = true; }
+  if (!['text', 'json', 'html', 'md', 'earl'].includes(o.format)) { console.error(`--format утга буруу (${o.format})`); o.badArg = true; }
   if (!['critical', 'serious', 'moderate', 'minor', 'none'].includes(o.failOn)) { console.error(`--fail-on утга буруу (${o.failOn})`); o.badArg = true; }
   if (!/^\d+x\d+$/.test(o.viewport)) { console.error(`--viewport нь 1280x800 хэлбэртэй байна (${o.viewport})`); o.badArg = true; }
   return o;
@@ -43,14 +45,15 @@ function parseArgs(argv) {
 
 const HELP = `hurteemj-audit <url|file>... [options]
   --level A|AA|AAA        Зорилтот түвшин (анхдагч: AA)
-  --format text|json|html|md  Тайлангийн формат
+  --format text|json|html|md|earl  Тайлангийн формат (earl = W3C EARL JSON-LD, ACT Rules-тэй уялдсан)
   --out <file>            Тайланг файлд бичих
   --fail-on critical|serious|moderate|minor|none  CI-г унагах босго (анхдагч: serious)
   --viewport 1280x800     Дэлгэцийн хэмжээ (320x640 = Reflow шалгалт)
   --fix safe|heuristic    Plugin юуг автоматаар засахыг харуулах
   --ignore ".ads,#chat"   Шалгахгүй selector-ууд
   --lang mn|en            Тайлангийн хэл
-  --no-deep               1.4.12 текстийн зайн гүн шалгалтыг алгасах`;
+  --no-deep               1.4.12 текстийн зайн гүн шалгалтыг алгасах
+  --no-fetch-styles       Гадны (CDN) CSS-ийг татаж 2.4.7 шалгахгүй`;
 
 const RANK = { critical: 0, serious: 1, moderate: 2, minor: 3 };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -77,9 +80,11 @@ async function auditOne(browser, url, o) {
   await page.addScriptTag({ path: BUNDLE });
   const report = await page.evaluate(async (o) => {
     const p = new Promise((r) => document.addEventListener('hurteemj:ready', r, { once: true }));
-    const h = window.Hurteemj.init({ level: o.level, fix: o.fix, deep: o.deep, widget: false, observe: false, ignore: o.ignore || [], uiLang: o.lang, force: true });
+    const h = window.Hurteemj.init({ level: o.level, fix: o.fix, deep: o.deep, widget: false, observe: false, ignore: o.ignore || [], uiLang: o.lang, fetchStyles: o.fetchStyles, force: true });
     await p;
-    return h.toJSON();
+    const json = h.toJSON();
+    json.earl = o.format === 'earl' ? h.toEARL() : undefined;
+    return json;
   }, o);
   await ctx.close();
   return report;
@@ -91,7 +96,7 @@ function textReport(reports, lang) {
     out.push(`\n■ ${r.url}\n  ${r.standard} ${r.level} · ${r.summary.fail} fail · ${r.summary.review} review · ${r.summary.fixed} fixable-now`);
     out.push(`  SC: ${r.summary.criteria.failing} failing, ${r.summary.criteria.needsReview} review, ${r.summary.criteria.manualOnly} manual-only of ${r.summary.criteria.total}`);
     for (const f of r.findings) {
-      const tag = f.fixed ? 'FIX ' : f.outcome === 'fail' ? 'FAIL' : 'REV ';
+      const tag = f.generated ? 'GEN ' : f.fixed ? 'FIX ' : f.outcome === 'fail' ? 'FAIL' : 'REV ';
       out.push(`  [${tag}] ${f.impact.padEnd(8)} ${f.sc.join(',').padEnd(14)} ${f.message}\n         ${f.selector || ''}`);
     }
     out.push(`  ${r.disclaimer[lang] || r.disclaimer.en}`);
@@ -134,7 +139,14 @@ async function main() {
     console.error(e.message); await browser.close(); process.exit(2);
   }
   await browser.close();
-  const fmt = { json: () => JSON.stringify(reports.length === 1 ? reports[0] : reports, null, 2), html: () => htmlReport(reports, o.lang), md: () => mdReport(reports, o.lang), text: () => textReport(reports, o.lang) }[o.format] || (() => textReport(reports, o.lang));
+  const earls = reports.map((r) => { const e = r.earl; delete r.earl; return e; });
+  const fmt = {
+    json: () => JSON.stringify(reports.length === 1 ? reports[0] : reports, null, 2),
+    earl: () => JSON.stringify(earls.length === 1 ? earls[0] : earls, null, 2),
+    html: () => htmlReport(reports, o.lang),
+    md: () => mdReport(reports, o.lang),
+    text: () => textReport(reports, o.lang),
+  }[o.format] || (() => textReport(reports, o.lang));
   const text = fmt();
   if (o.out) { writeFileSync(o.out, text); console.log(`→ ${o.out}`); } else console.log(text);
   const threshold = RANK[o.failOn];

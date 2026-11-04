@@ -43,10 +43,11 @@ export default [
         if (typeof ctx.config.altTextProvider === 'function') {
           try {
             const alt = await ctx.config.altTextProvider(img.currentSrc || img.src, img, ctx.pageLang);
-            if (alt && typeof alt === 'string') {
+            if (alt && typeof alt === 'string' && alt.trim()) {
               ctx.changes.setAttr(img, 'alt', alt.trim(), 'image-alt');
               ctx.changes.setAttr(img, 'data-hj-alt-generated', 'true', 'image-alt');
-              return m(`altTextProvider-оор alt үүсгэв: "${alt.trim()}" (хүн хянах шаардлагатай)`, `Generated alt via altTextProvider: "${alt.trim()}" (needs human review)`);
+              // generated: AI/гадны үйлчилгээний таамаг — тайланд "хүн баталгаажуулах" төлөвтэй үлдэнэ
+              return { ...m(`altTextProvider-оор alt үүсгэв: "${alt.trim()}" — хүн баталгаажуулна уу.`, `Generated alt via altTextProvider: "${alt.trim()}" — needs human verification.`), generated: true };
             }
           } catch (e) { /* provider алдаа — fallback */ }
         }

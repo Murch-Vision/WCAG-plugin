@@ -9,20 +9,24 @@
   // src/index.js
   var index_exports = {};
   __export(index_exports, {
+    ACT_RULES: () => ACT_RULES,
     DEFAULTS: () => DEFAULTS,
     DEFAULT_PREFS: () => DEFAULT_PREFS,
     PROFILES: () => PROFILES,
     STRINGS: () => STRINGS,
     VERSION: () => VERSION,
+    actRulesFor: () => actRulesFor,
     auditPage: () => auditPage,
     configFromScript: () => configFromScript,
     criteria: () => criteria,
     criteriaForLevel: () => criteriaForLevel,
     default: () => index_default,
     init: () => init,
+    loadExternalSheets: () => loadExternalSheets,
     normalizeConfig: () => normalizeConfig,
     rules: () => rules,
     serialize: () => serialize,
+    toEARL: () => toEARL,
     trackListeners: () => trackListeners
   });
 
@@ -331,10 +335,10 @@
   function createPathCache() {
     return { siblings: /* @__PURE__ */ new WeakMap(), ids: /* @__PURE__ */ new Map() };
   }
-  function nthOfType(n, cache) {
+  function nthOfType(n, cache2) {
     const parent = n.parentElement;
     if (!parent) return null;
-    let map = cache == null ? void 0 : cache.siblings.get(parent);
+    let map = cache2 == null ? void 0 : cache2.siblings.get(parent);
     if (!map) {
       map = /* @__PURE__ */ new Map();
       const counts = {};
@@ -344,41 +348,41 @@
         seen[c.localName] = (seen[c.localName] || 0) + 1;
         map.set(c, counts[c.localName] > 1 ? seen[c.localName] : 0);
       }
-      cache == null ? void 0 : cache.siblings.set(parent, map);
+      cache2 == null ? void 0 : cache2.siblings.set(parent, map);
     }
     return map.get(n) || 0;
   }
-  function uniqueId(el, cache) {
+  function uniqueId(el, cache2) {
     if (!el.id || !/^[A-Za-z][\w-]*$/.test(el.id)) return null;
     const root = el.getRootNode();
     const key = el.id;
-    let count = cache == null ? void 0 : cache.ids.get(key);
+    let count = cache2 == null ? void 0 : cache2.ids.get(key);
     if (count === void 0) {
       count = root.querySelectorAll(`#${CSS.escape(key)}`).length;
-      cache == null ? void 0 : cache.ids.set(key, count);
+      cache2 == null ? void 0 : cache2.ids.set(key, count);
     }
     return count === 1 ? `#${key}` : null;
   }
-  function cssPath(el, cache) {
+  function cssPath(el, cache2) {
     var _a3;
     if (!el || el.nodeType !== 1) return "";
     if (el === el.ownerDocument.documentElement) return "html";
     if (el === el.ownerDocument.body) return "body";
-    const own = uniqueId(el, cache);
+    const own = uniqueId(el, cache2);
     if (own) return own;
     const parts = [];
     for (let n = el; n && n.nodeType === 1 && n.localName !== "html"; n = n.parentElement) {
-      const id = uniqueId(n, cache);
+      const id = uniqueId(n, cache2);
       if (id) {
         parts.unshift(id);
         break;
       }
-      const nth = nthOfType(n, cache);
+      const nth = nthOfType(n, cache2);
       parts.unshift(nth ? `${n.localName}:nth-of-type(${nth})` : n.localName);
     }
     const host = (_a3 = el.getRootNode()) == null ? void 0 : _a3.host;
     const sel = parts.join(" > ");
-    return host ? `${cssPath(host, cache)} >>> ${sel}` : sel;
+    return host ? `${cssPath(host, cache2)} >>> ${sel}` : sel;
   }
   function snippet(el, max = 160) {
     const html = el.outerHTML || "";
@@ -395,9 +399,9 @@
   function fmt(str, data = {}) {
     return String(str).replace(/\{(\w+)\}/g, (_, k) => data[k] ?? `{${k}}`);
   }
-  function scriptOf(text) {
+  function scriptOf(text2) {
     let cyr = 0, lat = 0, mnOnly = 0;
-    for (const ch of text) {
+    for (const ch of text2) {
       if (/[Ѐ-ӿ]/.test(ch)) {
         cyr++;
         if (/[өүӨҮ]/.test(ch)) mnOnly++;
@@ -575,10 +579,10 @@
           if (typeof ctx.config.altTextProvider === "function") {
             try {
               const alt = await ctx.config.altTextProvider(img.currentSrc || img.src, img, ctx.pageLang);
-              if (alt && typeof alt === "string") {
+              if (alt && typeof alt === "string" && alt.trim()) {
                 ctx.changes.setAttr(img, "alt", alt.trim(), "image-alt");
                 ctx.changes.setAttr(img, "data-hj-alt-generated", "true", "image-alt");
-                return m(`altTextProvider-оор alt үүсгэв: "${alt.trim()}" (хүн хянах шаардлагатай)`, `Generated alt via altTextProvider: "${alt.trim()}" (needs human review)`);
+                return { ...m(`altTextProvider-оор alt үүсгэв: "${alt.trim()}" — хүн баталгаажуулна уу.`, `Generated alt via altTextProvider: "${alt.trim()}" — needs human verification.`), generated: true };
               }
             } catch (e) {
             }
@@ -896,7 +900,25 @@
     }
     return out;
   }
-  function backgroundOf(el) {
+  var MEDIA_TAGS = /^(img|video|canvas|picture|svg|iframe|object|embed)$/;
+  function backgroundOf(el, cache2) {
+    var _a3;
+    if (cache2 == null ? void 0 : cache2.has(el)) return cache2.get(el);
+    let res;
+    const parent = el.parentElement;
+    if (cache2 && parent && !MEDIA_TAGS.test(el.localName)) {
+      const own = getComputedStyle(el);
+      const transparent = (!own.backgroundImage || own.backgroundImage === "none") && (((_a3 = parseColor(own.backgroundColor)) == null ? void 0 : _a3[3]) ?? 1) === 0;
+      if (transparent) {
+        const pr = backgroundOf(parent, cache2);
+        if (pr.solid) res = pr;
+      }
+    }
+    if (!res) res = computeBackground(el);
+    cache2 == null ? void 0 : cache2.set(el, res);
+    return res;
+  }
+  function computeBackground(el) {
     const doc = el.ownerDocument;
     const win = doc.defaultView || window;
     const r = el.getBoundingClientRect();
@@ -937,7 +959,7 @@
     }
     let base = WHITE;
     for (let i = layers.length - 1; i >= 0; i--) base = blend(layers[i], base);
-    return { color: base };
+    return { color: base, solid: true };
   }
   function isLargeText(s) {
     const size = parseFloat(s.fontSize);
@@ -964,7 +986,7 @@
         if (s.visibility !== "visible" || parseFloat(s.fontSize) === 0) return null;
         if (/^(transparent|rgba\(0, 0, 0, 0\))$/.test(s.color)) return null;
         let fg = parseColor(s.color);
-        const bgInfo = backgroundOf(el);
+        const bgInfo = backgroundOf(el, ctx.bgCache);
         const large = isLargeText(s);
         const aaa = ctx.level === "AAA";
         const need = aaa ? large ? 4.5 : 7 : large ? 3 : 4.5;
@@ -1003,7 +1025,7 @@
       sc: ["1.4.1"],
       impact: "serious",
       selector: "p a[href], li a[href], td a[href], dd a[href], blockquote a[href]",
-      evaluate(el) {
+      evaluate(el, ctx) {
         var _a3;
         const s = getComputedStyle(el);
         if (s.display !== "inline" || !isVisible(el)) return null;
@@ -1017,7 +1039,7 @@
         if (s.boxShadow && s.boxShadow !== "none" || s.backgroundImage && s.backgroundImage !== "none") return null;
         const ps = getComputedStyle(block);
         if (parseInt(s.fontWeight, 10) - parseInt(ps.fontWeight, 10) >= 300 || s.fontStyle !== ps.fontStyle) return null;
-        const bg = backgroundOf(el);
+        const bg = backgroundOf(el, ctx.bgCache);
         if (bg.unknown) return null;
         if (s.backgroundColor !== ps.backgroundColor && ((_a3 = parseColor(s.backgroundColor)) == null ? void 0 : _a3[3]) > 0) return null;
         const lc = parseColor(s.color), tc = parseColor(ps.color);
@@ -1042,11 +1064,11 @@
       sc: ["1.4.11"],
       impact: "serious",
       selector: 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select, textarea',
-      evaluate(el) {
+      evaluate(el, ctx) {
         if (!isVisible(el) || isDisabled(el)) return null;
         const s = getComputedStyle(el);
         if (s.boxShadow && s.boxShadow !== "none" || s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0) return null;
-        const outer = backgroundOf(el.parentElement || el);
+        const outer = backgroundOf(el.parentElement || el, ctx.bgCache);
         if (outer.unknown || outer.gradient) return null;
         const around = outer.color;
         const field = parseColor(s.backgroundColor);
@@ -1154,9 +1176,9 @@
         if (!pageLang) return null;
         const own = el.closest("[lang]");
         if (own && own !== ctx.doc.documentElement) return null;
-        const text = normalize(el.textContent);
-        if (text.length < 40) return null;
-        const { script: script2 } = scriptOf(text);
+        const text2 = normalize(el.textContent);
+        if (text2.length < 40) return null;
+        const { script: script2 } = scriptOf(text2);
         const cyrPage = ["mn", "ru", "kk", "ky", "uk", "bg", "sr", "be", "tg", "bua", "sah", "tyv", "xal"].includes(pageLang);
         if (cyrPage && script2 === "Latn" || !cyrPage && script2 === "Cyrl") {
           return review(el, m(`Энэ хэсгийн бичиг (${script2}) хуудасны хэлээс (${pageLang}) өөр. Өөр хэл бол lang атрибут нэмнэ үү.`, `Text script (${script2}) differs from the page language (${pageLang}). Add a lang attribute if it is another language.`), { script: script2 });
@@ -2208,11 +2230,19 @@
   function* walkRules(rules2) {
     var _a3;
     for (const r of rules2) {
-      if (r.cssRules && !(r instanceof CSSStyleRule)) yield* walkRules(r.cssRules);
-      else if (r instanceof CSSStyleRule) {
+      if (r.styleSheet && !r.cssRules) {
+        let imported = null;
+        try {
+          imported = r.styleSheet.cssRules;
+        } catch {
+        }
+        if (imported) yield* walkRules(imported);
+        continue;
+      }
+      if (r.selectorText !== void 0) {
         yield r;
         if ((_a3 = r.cssRules) == null ? void 0 : _a3.length) yield* walkRules(r.cssRules);
-      }
+      } else if (r.cssRules) yield* walkRules(r.cssRules);
     }
   }
   function stickyEdges(ctx) {
@@ -2249,7 +2279,7 @@
         let anyFvIndicator = false;
         const hasIndicator = (st) => st.outlineStyle && st.outlineStyle !== "none" && st.outlineWidth !== "0px" || st.boxShadow && st.boxShadow !== "none" || st.outline && !/^(none|0|0px)$/.test(st.outline);
         const baseOf = (s) => s.replace(/:focus-visible|:focus(?!-within)/g, "").replace(/:where\(\s*\)|:is\(\s*\)/g, "").trim().replace(/^\*$/, "");
-        for (const sheet of ctx.doc.styleSheets) {
+        for (const sheet of ctx.sheets || ctx.doc.styleSheets) {
           if ((_b = (_a3 = sheet.ownerNode) == null ? void 0 : _a3.hasAttribute) == null ? void 0 : _b.call(_a3, "data-hurteemj-ui")) continue;
           let rules2;
           try {
@@ -3074,7 +3104,7 @@
       fix: null
     };
   }
-  function runAudit({ doc, win, config, scope, deep = false, runtime, changes, clickTracked, pageLang }) {
+  function runAudit({ doc, win, config, scope, deep = false, runtime, changes, clickTracked, pageLang, sheets }) {
     var _a3;
     const t0 = (win.performance || Date).now();
     const partial = scope && scope !== doc;
@@ -3089,17 +3119,23 @@
       clickTracked,
       pageLang: pageLang || (doc.documentElement.lang || config.lang || "en").split("-")[0].toLowerCase(),
       ignored: (el) => isIgnored(el, config.ignore),
-      partial
+      partial,
+      /** CSSOM sheet-үүд + fetch-ээр задалсан гадны sheet-үүд (2.4.7) */
+      sheets: [...doc.styleSheets, ...sheets || []],
+      /** Тодролын дэвсгэрийн кэш (нэг аудитын хүрээнд) */
+      bgCache: /* @__PURE__ */ new WeakMap()
     };
     const findings = [];
     const errors = [];
     const timings = {};
+    const rulesRun = [];
     const pathCache = createPathCache();
     const now = () => (win.performance || Date).now();
     for (const rule of activeRules(config)) {
       if (rule.deep && !deep) continue;
       if (partial && rule.run && !rule.scoped) continue;
       const tr = now();
+      let applicable = true;
       try {
         let results = [];
         if (rule.run) {
@@ -3108,6 +3144,7 @@
           const root = rule.root === "document" ? doc : ctx.scope;
           let els = qsa(root, rule.selector);
           if (partial && ((_a3 = scope.matches) == null ? void 0 : _a3.call(scope, rule.selector))) els.unshift(scope);
+          applicable = els.length > 0;
           for (const el of els) {
             if (ctx.ignored(el)) continue;
             const r = rule.evaluate(el, ctx);
@@ -3123,11 +3160,12 @@
         errors.push({ ruleId: rule.id, error: String(e && e.message || e) });
       }
       timings[rule.id] = Math.round((now() - tr) * 10) / 10;
+      rulesRun.push({ id: rule.id, sc: rule.sc, applicable });
     }
     findings.sort((a, b) => (a.outcome === b.outcome ? 0 : a.outcome === "fail" ? -1 : 1) || IMPACT_ORDER[a.impact] - IMPACT_ORDER[b.impact]);
-    return buildReport({ doc, win, config, findings, errors, partial, duration: now() - t0, timings });
+    return buildReport({ doc, win, config, findings, errors, partial, duration: now() - t0, timings, rulesRun });
   }
-  function buildReport({ doc, win, config, findings, errors = [], partial = false, duration = 0, timings }) {
+  function buildReport({ doc, win, config, findings, errors = [], partial = false, duration = 0, timings, rulesRun }) {
     var _a3;
     const bySC = {};
     for (const f of findings) for (const sc of f.sc) (bySC[sc] || (bySC[sc] = { fail: 0, review: 0, fixed: 0 }))[f.outcome]++;
@@ -3155,12 +3193,16 @@
       durationMs: Math.round(duration),
       /** Дүрэм бүрийн хугацаа (ms) — гүйцэтгэлийн оношилгоонд */
       timings: timings || null,
+      /** Ажилласан дүрмүүд ба хамаарах элемент байсан эсэх (EARL passed/inapplicable) */
+      rulesRun: rulesRun || null,
       summary: {
         fail: count("fail"),
         review: count("review"),
         fixed: findings.filter((f) => f.fixed).length,
         /** Засагдаагүй үлдсэн зөрчил */
         remaining: findings.filter((f) => f.outcome === "fail" && !f.fixed).length,
+        /** AI/гадны үйлчилгээгээр үүсгэсэн (хүн баталгаажуулах) засвар */
+        generated: findings.filter((f) => f.generated).length,
         byImpact: Object.fromEntries(["critical", "serious", "moderate", "minor"].map((i) => [i, findings.filter((f) => f.impact === i && f.outcome === "fail" && !f.fixed).length])),
         criteria: {
           total: criteria2.length,
@@ -3238,8 +3280,9 @@
         const res = await rule.fix.apply(f, { ...ctxBase, tier });
         if (res) {
           f.fixed = true;
-          f.fix = res;
+          f.fix = { mn: res.mn, en: res.en };
           f.fixTier = rule.fix.tier;
+          if (res.generated) f.generated = true;
           fixed++;
           if (rule.fix.once) onceDone.set(rule.id, res);
         }
@@ -3249,6 +3292,7 @@
     }
     report.summary.fixed = report.findings.filter((x) => x.fixed).length;
     report.summary.remaining = report.findings.filter((x) => x.outcome === "fail" && !x.fixed).length;
+    report.summary.generated = report.findings.filter((x) => x.generated).length;
     for (const k of Object.keys(report.summary.byImpact)) {
       report.summary.byImpact[k] = report.findings.filter((x) => x.impact === k && x.outcome === "fail" && !x.fixed).length;
     }
@@ -3291,7 +3335,11 @@
     reportSampleRate: 1,
     statementUrl: null,
     feedbackUrl: null,
-    nonce: null
+    nonce: null,
+    /** CORS-оор хаалттай гадны CSS-ийг fetch-ээр татаж 2.4.7 шалгалтад оруулах */
+    fetchStyles: true,
+    /** async () => Partial<Preferences> — серверээс (нэвтэрсэн хэрэглэгч) тохиргоо ачаалах */
+    loadPrefs: null
   };
   var ATTR_MAP = {
     lang: "lang",
@@ -3319,10 +3367,11 @@
     nonce: "nonce",
     reportSampleRate: "report-sample-rate",
     offsetX: "offset-x",
-    offsetY: "offset-y"
+    offsetY: "offset-y",
+    fetchStyles: "fetch-styles"
   };
   var LIST_KEYS = /* @__PURE__ */ new Set(["ignore", "languages", "only"]);
-  var BOOL_KEYS = /* @__PURE__ */ new Set(["auditor", "widget", "launcher", "observe", "audit", "deep", "console", "respectOS"]);
+  var BOOL_KEYS = /* @__PURE__ */ new Set(["auditor", "widget", "launcher", "observe", "audit", "deep", "console", "respectOS", "fetchStyles"]);
   var STRING_OR_FALSE = /* @__PURE__ */ new Set(["fix", "storage", "shortcut"]);
   var STRING_KEYS = /* @__PURE__ */ new Set(["lang", "uiLang", "color", "focusColor", "statementUrl", "feedbackUrl", "reportEndpoint", "nonce", "storageKey", "cookieDomain", "shortcutLabel"]);
   var LEVELS = /* @__PURE__ */ new Set(["A", "AA", "AAA"]);
@@ -3386,7 +3435,8 @@
     if (c.lang) c.lang = String(c.lang).split("-")[0].toLowerCase();
     if (c.uiLang) c.uiLang = String(c.uiLang).toLowerCase();
     if (c.uiLang && !c.languages.includes(c.uiLang)) c.languages = [c.uiLang, ...c.languages];
-    for (const k of ["audit", "deep", "observe", "widget", "launcher", "auditor", "respectOS", "console"]) c[k] = c[k] === "false" ? false : !!c[k];
+    for (const k of ["audit", "deep", "observe", "widget", "launcher", "auditor", "respectOS", "console", "fetchStyles"]) c[k] = c[k] === "false" ? false : !!c[k];
+    if (c.loadPrefs != null && typeof c.loadPrefs !== "function") bad("loadPrefs", typeof c.loadPrefs, null);
     if (c.shortcut === false || c.shortcut === "false" || c.shortcut === "none") c.shortcut = null;
     c.warnings = warnings;
     return c;
@@ -3576,12 +3626,12 @@
       state.regions = { box, polite, assertive };
       return state.regions;
     }
-    function announce(text, politeness = "polite") {
-      if (!text || !doc.body) return;
+    function announce(text2, politeness = "polite") {
+      if (!text2 || !doc.body) return;
       const r = regions()[politeness === "assertive" ? "assertive" : "polite"];
       r.textContent = "";
       win.setTimeout(() => {
-        r.textContent = text;
+        r.textContent = text2;
       }, 60);
     }
     function destroy() {
@@ -4003,8 +4053,8 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
   function accentPair(color) {
     let c = parseColor(color) || [11, 75, 209, 1];
     c = adjustForContrast(c, [255, 255, 255, 1], 4.6);
-    const text = contrastRatio([255, 255, 255], c) >= 4.5 ? "#ffffff" : "#000000";
-    return [toCss(c), text];
+    const text2 = contrastRatio([255, 255, 255], c) >= 4.5 ? "#ffffff" : "#000000";
+    return [toCss(c), text2];
   }
   function createWidget({ doc, win, config, prefs, t, getLang, setLang, onAudit, getReport, runtime }) {
     const host = doc.createElement("div");
@@ -4049,7 +4099,7 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       if (!r) return `<p class="note">…</p>`;
       const lang = getLang();
       const items = r.findings.slice(0, 60).map((f) => `<li>
-      <span class="badge ${f.fixed ? "b-fixed" : f.outcome === "fail" ? "b-fail" : "b-review"}">${esc(f.fixed ? t("auditFixed") : f.outcome === "fail" ? t("auditFail") : t("auditReview"))}</span>
+      <span class="badge ${f.generated ? "b-review" : f.fixed ? "b-fixed" : f.outcome === "fail" ? "b-fail" : "b-review"}">${esc(f.generated ? t("auditGenerated") : f.fixed ? t("auditFixed") : f.outcome === "fail" ? t("auditFail") : t("auditReview"))}</span>
       <strong>${esc(f.sc.join(", "))}</strong> · ${esc(f.impact)}
       <div>${esc(messageText(f, lang))}</div>
       ${f.fixed && f.fix ? `<div class="meta">✓ ${esc(f.fix[lang] || f.fix.en)}</div>` : ""}
@@ -4280,10 +4330,10 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       if (!prefs.get().tts || !synth || host.contains(e.target)) return;
       const sel = String(((_a3 = win.getSelection) == null ? void 0 : _a3.call(win)) || "").trim();
       const el = (_c = (_b = e.target).closest) == null ? void 0 : _c.call(_b, "p, li, h1, h2, h3, h4, h5, h6, td, th, figcaption, blockquote, label, a, button, dd, dt, span, div");
-      const text = sel || (el ? (el.innerText || el.textContent || "").trim().slice(0, 1200) : "");
-      if (!text) return;
+      const text2 = sel || (el ? (el.innerText || el.textContent || "").trim().slice(0, 1200) : "");
+      if (!text2) return;
       synth.cancel();
-      const u = new win.SpeechSynthesisUtterance(text);
+      const u = new win.SpeechSynthesisUtterance(text2);
       const pageLang = (((_d = el == null ? void 0 : el.closest("[lang]")) == null ? void 0 : _d.getAttribute("lang")) || doc.documentElement.lang || getLang()).toLowerCase();
       u.lang = pageLang;
       const voice = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith(pageLang.split("-")[0]));
@@ -4414,6 +4464,7 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       auditFail: "Зөрчил",
       auditReview: "Хянах",
       auditFixed: "Зассан",
+      auditGenerated: "AI — баталгаажуулах",
       auditShow: "Харуулах",
       auditManual: "Гараар шалгах SC",
       auditDisclaimer: "Автомат шалгалт WCAG-ийн бүх шаардлагыг илрүүлэхгүй. Энэ нь эцсийн дүгнэлт биш.",
@@ -4478,6 +4529,7 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       auditFail: "Failures",
       auditReview: "Review",
       auditFixed: "Fixed",
+      auditGenerated: "AI — verify",
       auditShow: "Show",
       auditManual: "Manual-check SC",
       auditDisclaimer: "Automated testing does not detect every WCAG issue. This is not a conformance claim.",
@@ -4510,6 +4562,234 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
   }
   function trackedTargets(win = typeof window !== "undefined" ? window : null) {
     return (win == null ? void 0 : win[KEY]) || null;
+  }
+
+  // src/core/stylesheets.js
+  var cache = /* @__PURE__ */ new Map();
+  function supportsConstructedSheets(win) {
+    return !!win && typeof win.CSSStyleSheet === "function" && typeof win.CSSStyleSheet.prototype.replace === "function";
+  }
+  async function fetchSheet(win, href, { timeout, maxBytes }) {
+    try {
+      const ctrl = typeof win.AbortController === "function" ? new win.AbortController() : null;
+      const timer = ctrl && win.setTimeout(() => ctrl.abort(), timeout);
+      const res = await win.fetch(href, { mode: "cors", credentials: "omit", cache: "force-cache", signal: ctrl == null ? void 0 : ctrl.signal });
+      if (timer) win.clearTimeout(timer);
+      if (!res.ok) return null;
+      const len = Number(res.headers.get("content-length"));
+      if (len > maxBytes) return null;
+      const text2 = await res.text();
+      if (text2.length > maxBytes) return null;
+      const sheet = new win.CSSStyleSheet();
+      await sheet.replace(text2);
+      try {
+        Object.defineProperty(sheet, "hjHref", { value: href });
+      } catch {
+      }
+      return sheet;
+    } catch {
+      return null;
+    }
+  }
+  function blockedSheetHrefs(doc) {
+    const out = [];
+    for (const sheet of doc.styleSheets) {
+      if (!sheet.href) continue;
+      try {
+        void sheet.cssRules;
+      } catch {
+        out.push(sheet.href);
+      }
+    }
+    return out;
+  }
+  async function loadExternalSheets(doc, { timeout = 4e3, max = 25, maxBytes = 15e5 } = {}) {
+    const win = doc.defaultView;
+    if (!supportsConstructedSheets(win) || typeof win.fetch !== "function") return [];
+    const hrefs = blockedSheetHrefs(doc).slice(0, max);
+    const sheets = await Promise.all(hrefs.map((href) => {
+      if (!cache.has(href)) cache.set(href, fetchSheet(win, href, { timeout, maxBytes }));
+      return cache.get(href);
+    }));
+    return sheets.filter(Boolean);
+  }
+
+  // src/wcag/act.js
+  var ACT_RULES = {
+    "23a2a8": "Image has non-empty accessible name",
+    "9eb3f6": "Image filename is not accessible name",
+    qt1vmo: "Image accessible name is descriptive",
+    "7d6734": "SVG element with explicit role has non-empty accessible name",
+    "59796f": "Image button has non-empty accessible name",
+    "8fc3b6": "Object element rendering non-text content has non-empty accessible name",
+    f51b46: "Video element auditory content has captions",
+    eac66b: "Video element auditory content has accessible alternative",
+    "1a02b0": "Video element visual-only content has transcript",
+    c5a4ea: "Video element visual content has accessible alternative",
+    "2eb176": "Audio element content has transcript",
+    e7aa44: "Audio element content has text alternative",
+    "80f0bf": "Audio or video avoids automatically playing audio",
+    "4c31df": "Audio or video that plays automatically has a control mechanism",
+    efbfc7: "Text content that updates automatically can be paused, stopped or hidden",
+    afw4f7: "Text has minimum contrast",
+    "09o5cg": "Text has enhanced contrast",
+    b5c3f8: "HTML page has lang attribute",
+    bf051a: "HTML page language is valid",
+    ucwvc8: "HTML page language matches default language",
+    de46e4: "Element with lang attribute has valid language tag",
+    "2779a5": "HTML page has non-empty title",
+    c4a8a4: "HTML page title is descriptive",
+    ffd0e9: "Heading has non-empty accessible name",
+    b40fd1: "Document has a landmark with non-repeated content",
+    cf77f2: "Bypass blocks of repeated content",
+    ye5d6e: "Document has an instrument to move focus to non-repeated content",
+    b4f0c3: "Meta viewport allows for zoom",
+    bc659a: "Meta element has no refresh delay",
+    bisz58: "Meta element has no refresh delay (no exception)",
+    "24afc2": "Letter spacing in style attributes is not !important",
+    "78fd32": "Line height in style attributes is not !important",
+    "9e45ec": "Word spacing in style attributes is not !important",
+    e086e5: "Form field has non-empty accessible name",
+    "73f2c2": "Autocomplete attribute has valid value",
+    "36b590": "Error message describes invalid form field value",
+    oj04fd: "Element in sequential focus order has visible focus",
+    "0ssw9k": "Scrollable element is keyboard accessible",
+    "97a4e1": "Button has non-empty accessible name",
+    c487ae: "Link has non-empty accessible name",
+    aizyf1: "Link is descriptive",
+    "5effbb": "Link in context is descriptive",
+    "2ee8b8": "Visible label is part of accessible name",
+    "674b10": "Role attribute has valid value",
+    "5f99a7": "ARIA attribute is defined in WAI-ARIA",
+    "6a7281": "ARIA state or property has valid value",
+    "4e8ab6": "Element with role attribute has required states and properties",
+    in6db8: "ARIA required ID references exist",
+    "3ea0c8": "Id attribute value is unique",
+    "6cfa84": "Element with aria-hidden has no content in sequential focus navigation",
+    m6b1q3: "Menuitem has non-empty accessible name",
+    cae760: "Iframe element has non-empty accessible name",
+    "307n5z": "Element with presentational children has no focusable content",
+    "46ca7f": "Element marked as decorative is not exposed"
+  };
+  var MAP = {
+    "image-alt": ["23a2a8"],
+    "image-alt-quality": ["9eb3f6", "qt1vmo"],
+    "svg-img-name": ["7d6734"],
+    "input-image-alt": ["59796f"],
+    "object-alt": ["8fc3b6"],
+    "video-captions": ["f51b46", "eac66b"],
+    "media-alternative": ["1a02b0", "c5a4ea", "2eb176", "e7aa44"],
+    "media-autoplay": ["80f0bf", "4c31df"],
+    "marquee-blink": ["efbfc7"],
+    "color-contrast": ["afw4f7", "09o5cg"],
+    "html-lang": ["b5c3f8", "bf051a", "ucwvc8"],
+    "lang-valid": ["de46e4"],
+    "document-title": ["2779a5", "c4a8a4"],
+    "empty-heading": ["ffd0e9"],
+    "landmark-main": ["b40fd1"],
+    bypass: ["cf77f2", "ye5d6e"],
+    "meta-viewport": ["b4f0c3"],
+    "meta-refresh": ["bc659a", "bisz58"],
+    "text-spacing-important": ["24afc2", "78fd32", "9e45ec"],
+    label: ["e086e5"],
+    "autocomplete-valid": ["73f2c2"],
+    "error-identification": ["36b590"],
+    "focus-visible": ["oj04fd"],
+    "scrollable-region-focusable": ["0ssw9k"],
+    "button-name": ["97a4e1"],
+    "link-name": ["c487ae"],
+    "link-purpose": ["aizyf1", "5effbb"],
+    "label-in-name": ["2ee8b8"],
+    "aria-valid-role": ["674b10"],
+    "aria-valid-attr": ["5f99a7", "6a7281"],
+    "aria-required-attr": ["4e8ab6"],
+    "aria-idrefs": ["in6db8"],
+    "duplicate-id-aria": ["3ea0c8"],
+    "aria-hidden-focus": ["6cfa84"],
+    "aria-name-required": ["m6b1q3"],
+    "iframe-title": ["cae760"],
+    "nested-interactive": ["307n5z"],
+    "presentation-role-conflict": ["46ca7f"]
+  };
+  var ACT_URL = "https://www.w3.org/WAI/standards-guidelines/act/rules/";
+  function actRulesFor(ruleId) {
+    return (MAP[ruleId] || []).map((id) => ({ id, name: ACT_RULES[id], url: `${ACT_URL}${id}/` }));
+  }
+
+  // src/core/earl.js
+  var WCAG22 = "https://www.w3.org/TR/WCAG22/#";
+  function scAnchor(id) {
+    const c = CRITERIA_BY_ID[id];
+    if (!c) return null;
+    return c.title.en.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+  var scUrl = (id) => `${WCAG22}${scAnchor(id)}`;
+  var text = (msg, lang) => typeof msg === "string" ? msg : (msg == null ? void 0 : msg[lang]) ?? (msg == null ? void 0 : msg.en) ?? "";
+  function toEARL(report, { lang = "en" } = {}) {
+    var _a3, _b, _c, _d;
+    const assertor = "_:hurteemj";
+    const subject = report.url || "_:page";
+    const graph = [
+      { "@id": assertor, "@type": ["earl:Assertor", "earl:Software"], "dct:title": ((_a3 = report.tool) == null ? void 0 : _a3.name) || "hurteemj", "dct:hasVersion": (_b = report.tool) == null ? void 0 : _b.version, "dct:description": `WCAG 2.2 ${report.level} automated audit` },
+      { "@id": subject, "@type": ["earl:TestSubject", "sch:WebPage"], "dct:title": report.title || "", "dct:date": report.timestamp }
+    ];
+    const assertion = (test, outcome, extra = {}, result = {}) => ({
+      "@type": "earl:Assertion",
+      assertedBy: assertor,
+      subject,
+      test,
+      mode: "earl:automatic",
+      ...extra,
+      result: { "@type": "earl:TestResult", outcome: `earl:${outcome}`, ...result }
+    });
+    const testsFor = (ruleId, sc) => {
+      const act = actRulesFor(ruleId);
+      return act.length ? act.map((a) => a.url) : sc.map(scUrl);
+    };
+    for (const f of report.findings) {
+      const outcome = f.outcome === "fail" && !f.generated ? "failed" : "cantTell";
+      const tests = testsFor(f.ruleId, f.sc);
+      const result = {
+        "dct:description": text(f.message, lang),
+        ...f.selector ? { pointer: { "@type": "ptr:CSSSelectorPointer", "ptr:expression": f.selector } } : {},
+        ...f.html ? { "hj:snippet": f.html } : {},
+        ...f.fixed ? { "hj:fixed": true, "hj:fixDescription": text(f.fix, lang), "hj:fixTier": f.fixTier } : {},
+        ...f.generated ? { "hj:generated": true } : {}
+      };
+      for (const t of tests) {
+        graph.push(assertion(t, outcome, { "hj:rule": f.ruleId, "hj:wcag": f.sc.map(scUrl), "hj:impact": f.impact }, result));
+      }
+    }
+    const withFindings = new Set(report.findings.map((f) => f.ruleId));
+    for (const r of report.rulesRun || []) {
+      if (withFindings.has(r.id)) continue;
+      const outcome = r.applicable ? "passed" : "inapplicable";
+      for (const t of testsFor(r.id, r.sc)) graph.push(assertion(t, outcome, { "hj:rule": r.id, "hj:wcag": r.sc.map(scUrl) }));
+    }
+    for (const c of report.criteria || []) {
+      if (c.status === "manual") graph.push(assertion(scUrl(c.id), "untested", { mode: "earl:manual", "hj:wcag": [scUrl(c.id)] }, { "dct:description": `${c.id} ${((_c = c.title) == null ? void 0 : _c[lang]) ?? ((_d = c.title) == null ? void 0 : _d.en) ?? ""}: requires human evaluation` }));
+    }
+    return {
+      "@context": {
+        "@vocab": "http://www.w3.org/ns/earl#",
+        earl: "http://www.w3.org/ns/earl#",
+        dct: "http://purl.org/dc/terms/",
+        sch: "https://schema.org/",
+        ptr: "http://www.w3.org/2009/pointers#",
+        WCAG22,
+        ACT: ACT_URL,
+        hj: "https://github.com/Murch-Vision/WCAG-plugin#",
+        assertedBy: { "@type": "@id" },
+        subject: { "@type": "@id" },
+        test: { "@type": "@id" },
+        mode: { "@type": "@id" },
+        outcome: { "@type": "@id" },
+        "hj:wcag": { "@type": "@id" }
+      },
+      "@graph": graph,
+      "hj:summary": report.summary,
+      "hj:disclaimer": text(report.disclaimer, lang)
+    };
   }
 
   // src/index.js
@@ -4557,15 +4837,23 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
     });
     let widget = null;
     let observer = null;
+    let sheetsPromise = null;
+    const externalSheets = () => {
+      if (!config.fetchStyles) return Promise.resolve([]);
+      if (!sheetsPromise) sheetsPromise = loadExternalSheets(doc).catch(() => []);
+      return sheetsPromise;
+    };
     async function audit({ deep = config.deep, fix: fix2 = true, scope } = {}) {
       var _a4;
       if (state.destroyed) return state.report;
+      const sheets = scope ? [] : await externalSheets();
+      if (state.destroyed) return state.report;
       state.busy = true;
       try {
-        const rep = runAudit({ doc, win, config, deep, runtime, changes, clickTracked, pageLang: pageLang(), scope });
+        const rep = runAudit({ doc, win, config, deep, runtime, changes, clickTracked, pageLang: pageLang(), scope, sheets });
         if (fix2 && config.fix) await applyFixes(rep, { doc, win, config, runtime, changes, pageLang: pageLang() });
         if (scope && state.report) {
-          state.report = buildReport({ doc, win, config, findings: mergeFindings(state.report.findings, rep.findings), errors: state.report.errors.concat(rep.errors) });
+          state.report = buildReport({ doc, win, config, findings: mergeFindings(state.report.findings, rep.findings), errors: state.report.errors.concat(rep.errors), rulesRun: state.report.rulesRun });
         } else {
           state.report = rep;
         }
@@ -4599,8 +4887,9 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
         for (const f of state.report.findings) if (!ruleId || f.ruleId === ruleId) {
           f.fixed = false;
           f.fix = null;
+          f.generated = false;
         }
-        state.report = buildReport({ doc, win, config, findings: state.report.findings, errors: state.report.errors });
+        state.report = buildReport({ doc, win, config, findings: state.report.findings, errors: state.report.errors, rulesRun: state.report.rulesRun });
       }
       observer == null ? void 0 : observer.drop();
       state.busy = false;
@@ -4685,8 +4974,10 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       get language() {
         return uiLang;
       },
-      announce: (text, p) => runtime.announce(text, p),
+      announce: (text2, p) => runtime.announce(text2, p),
       toJSON: () => state.report ? serialize(state.report, uiLang) : null,
+      /** EARL / JSON-LD (W3C Evaluation and Report Language) тайлан — ACT Rules-тэй уялдсан */
+      toEARL: () => state.report ? toEARL(state.report, { lang: uiLang }) : null,
       changes: () => changes.summary(),
       destroy() {
         state.destroyed = true;
@@ -4703,6 +4994,14 @@ legend{font-weight:600;margin-bottom:.35em;padding:0}
       var _a4;
       if (state.destroyed) return;
       runtime.ensureBase();
+      if (typeof config.loadPrefs === "function") {
+        try {
+          const remote = await Promise.race([config.loadPrefs(), new Promise((r) => win.setTimeout(() => r(null), config.loadPrefsTimeout || 3e3))]);
+          if (state.destroyed) return;
+          if (remote && typeof remote === "object") prefs.set(remote, { silent: true });
+        } catch {
+        }
+      }
       prefs.apply();
       if (config.widget) {
         widget = createWidget({

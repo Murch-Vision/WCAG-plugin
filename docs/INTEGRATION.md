@@ -28,6 +28,7 @@
 | `data-deep` | 1.4.12 текстийн зайн бодит туршилт | `false` |
 | `data-nonce` | CSP nonce (`<script nonce>`-оос автоматаар авна) | — |
 | `data-report-sample-rate` | Тайлан илгээх магадлал 0–1 | `1` |
+| `data-fetch-styles` | `false` — CDN дээрх CSS-ийг татаж 2.4.7 шалгахгүй | `true` |
 | `data-offset-x`, `data-offset-y` | Launcher-ийн зай (px) | `16` |
 
 Буруу утга (жишээ нь `data-level="B"`) plugin-ийг унагахгүй: анхдагч руу буцаж `console.warn` хийгдэнэ, `api.config.warnings`-д жагсаана.
@@ -44,10 +45,16 @@
     defaults: { fontScale: 1.1 },            // анхны хэрэглэгчийн тохиргоо
     altTextProvider: async (src, img, lang) => (await fetch('/api/alt?src=' + encodeURIComponent(src))).text(),
     onReport: (r) => console.log(r.summary),
+    // Нэвтэрсэн хэрэглэгчийн тохиргоо: серверээс ачаалж (loadPrefs), өөрчлөгдөхөд хадгална (onPrefsChange)
+    loadPrefs: async () => (await fetch('/api/me/a11y', { credentials: 'same-origin' })).json(),
     onPrefsChange: (prefs) => fetch('/api/me/a11y', { method: 'PUT', body: JSON.stringify(prefs) }),
   };
 </script>
 ```
+
+`altTextProvider`-оор үүссэн alt текст тайланд `generated: true` төлөвтэй (самбарт "AI — баталгаажуулах", CLI-д `GEN`, EARL-д `earl:cantTell`) тул хүн баталгаажуулах хүртэл "зассан" гэж тооцогдохгүй.
+
+`loadPrefs` 3 секундэд (`loadPrefsTimeout`) хариу өгөхгүй эсвэл алдаа гаргавал localStorage/анхдагч тохиргоо хэрэглэгдэнэ; серверийн утга `sanitizePrefs`-ээр шалгагдана (танигдахгүй түлхүүр хаягдана).
 
 ## 2. npm / ES module
 
@@ -145,6 +152,18 @@ jobs:
 ```
 
 Exit code: `0` — босгоос дээш зөрчилгүй, `1` — зөрчилтэй, `2` — ажиллуулах алдаа.
+
+### EARL / ACT Rules тайлан
+
+```bash
+npx hurteemj-audit https://example.mn --format earl --out report.earl.json
+```
+
+W3C [EARL](https://www.w3.org/TR/EARL10-Schema/) JSON-LD: `earl:Assertion` бүр [ACT Rules](https://www.w3.org/WAI/standards-guidelines/act/rules/) дүрмийн URL (уялдаагүй дүрэмд WCAG 2.2 SC-ийн URL) руу заана. Ингэснээр axe, Alfa, QualWeb зэрэг хэрэгслийн тайлантай нэг форматаар харьцуулж, аудитын тайланд (VPAT/ACR) хавсаргаж болно. Дүрэм бүрийн ACT уялдааг [RULES.md](RULES.md)-ээс харна уу. Браузерт: `api.toEARL()`.
+
+### Гадны CSS (CDN) ба 2.4.7
+
+`<link href="https://cdn…/bootstrap.min.css">` зэрэг cross-origin CSS-ийг браузер CSSOM-оор уншуулдаггүй. Plugin ийм файлыг `fetch`-ээр (CORS зөвшөөрсөн бол — ихэнх CDN зөвшөөрдөг; браузерын кэшээс) татаж `:focus` дүрмүүдийг шалгана. Хаахыг хүсвэл `fetchStyles: false` / `data-fetch-styles="false"` / CLI `--no-fetch-styles`.
 
 ## 10. Тайлан хүлээн авах (мониторинг)
 

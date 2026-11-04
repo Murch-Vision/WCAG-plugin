@@ -62,16 +62,24 @@
 
 Тестийн тоо (1-р шат): 18 → 30 (6 unit + 7 regression нэмэгдсэн).
 
+## 1c. Хэрэгжүүлсэн эн тэргүүний саналууд (3-р шат)
+
+§3-ын "Эн тэргүүнд" 5 саналыг бүгдийг хэрэгжүүлсэн (тест 40 → 48):
+
+| # | Санал | Хэрэгжилт | Тест |
+|---|---|---|---|
+| 1 | **ACT Rules уялдаа + EARL гаралт** | `src/wcag/act.js`: 38/65 дүрэм 53 ACT дүрэмтэй холбогдсон (ID-уудыг ACT-Rules Community Group-ийн репозиторийн файлын нэрээс баталгаажуулсан). `src/core/earl.js` → `api.toEARL()`, CLI `--format earl`: W3C EARL JSON-LD, `earl:Assertion` бүр ACT дүрэм (байхгүй бол WCAG 2.2 SC-ийн anchor) руу заана. Төлөв: fail → `failed`, review/AI → `cantTell`, олдворгүй дүрэм → `passed`, хамаарах элементгүй → `inapplicable` (`report.rulesRun`), гараар шалгах SC → `untested`. Plugin-ийн ажиллах үеийн засвар эх хуудасны үр дүнг өөрчлөхгүй (`hj:fixed`). Цэвэр fixture: 62 passed / 30 inapplicable / 21 untested. | `features: ACT`, `toEARL`, CLI smoke |
+| 2 | **Гадны CSS-ийн 2.4.7 шинжилгээ** | `src/core/stylesheets.js`: CSSOM-д хаалттай (`cssRules` SecurityError) sheet-ийг `fetch(mode:'cors', cache:'force-cache')`-ээр татаж `CSSStyleSheet.replace()`-ээр задална; href-ээр кэшлэнэ; 25 файл / 1.5MB / 4с хязгаар. `focus-visible` дүрэм `ctx.sheets` ашиглана, `@import` дэмжинэ. Тохиргоо `fetchStyles` (анхдагч `true`), CLI `--no-fetch-styles`. CORS зөвшөөрөөгүй файл чимээгүй алгасагдана. | `features: Гадны CSS` (Playwright route-оор cross-origin CSS) |
+| 3 | **Тодролын кэш** | `backgroundOf(el, cache)`: өөрийн дэвсгэргүй элемент эцгийнхээ "solid" (тунгалаг бус нэг өнгө) үр дүнг өвлөнө — эцгийг рекурсивээр нэг л удаа hit-test хийнэ; gradient/зураг/хагас тунгалаг эцэгтэй бол өмнөх шигээ тус тусад нь тооцно. Хэмжилт (1500 карт, 3 удаагийн хамгийн бага): дэвсгэртэй картууд **165 → 110ms**, дэвсгэргүй **100 → 71ms** — 1.4–1.5×. Саналд дурдсан 3–5× хүрээгүй: үлдсэн хугацааны дийлэнх нь hit-test биш `getComputedStyle`/`isVisible` тул дараагийн алхам нь эдгээрийг кэшлэх (§3). | `features: Тодролын кэш` ×2 |
+| 4 | **AI alt-ыг "баталгаажуулах" төлөвтэй** | `altTextProvider`-ийн засвар `finding.generated = true`, `summary.generated`; самбарт "AI — баталгаажуулах" badge, CLI-д `GEN`, EARL-д `cantTell`. `revert()` төлөвийг цэвэрлэнэ. | `features: altTextProvider` |
+| 5 | **`loadPrefs` hook** | `config.loadPrefs: async () => Partial<Preferences>` — эхний зурагнаас өмнө ачаалж `sanitizePrefs`-ээр шалгаад хэрэглэнэ, локал нөөцөд ч хадгална; `loadPrefsTimeout` (3с) эсвэл алдаа гарвал локал/анхдагч руу. `onPrefsChange`-тэй хослуулбал олон төхөөрөмж хооронд тохиргоо дагана. | `features: loadPrefs` |
+
 ## 3. Хэрэгжүүлээгүй сайжруулалтын санал (эрэмбэлсэн)
 
-### Эн тэргүүнд (дараагийн хувилбарт)
-1. **W3C ACT Rules-тэй уялдуулах, EARL гаралт.** Дүрэм бүрийг ACT rule ID-тэй холбовол (жишээ нь `image-alt` → ACT `23a2a8`) бусад хэрэгслийн (axe, Alfa, QualWeb) тайлантай харьцуулах, засгийн газрын тендерт "ACT-д нийцсэн" гэж мэдэгдэх боломжтой. Тайланг EARL/JSON-LD форматаар экспортлох.
-2. **Гадны CSS-ийн 2.4.7 шинжилгээ.** CORS-оор хаалттай stylesheet-ийг `fetch`-ээр татаж (same-origin эсвэл CORS зөвшөөрсөн бол) `CSSStyleSheet.replace()`-ээр уншвал `focus-visible` дүрмийн хамрах хүрээ өргөснө. Одоо CDN дээрх framework CSS (Bootstrap г.м.) шалгагдахгүй.
-3. **Тодролын шалгалтыг хурдасгах.** `color-contrast` элемент бүрт `elementsFromPoint` дууддаг (3600 элементэд ~300ms). Ижил эцэгтэй, ижил computed color/background-тай элементүүдийг кэшлэвэл 3–5 дахин хурдасна.
-4. **`altTextProvider`-ийн үр дүнг "хянах" гэж тэмдэглэх.** AI-аар үүсгэсэн alt-ыг одоо `fixed` гэж харуулдаг. Тайланд тусдаа `outcome: 'generated'` төлөв нэмж, хүн баталгаажуулах жагсаалтад оруулах.
-5. **Самбарын тохиргоог серверт хадгалах hook.** `onPrefsChange` бий, гэхдээ нэвтэрсэн хэрэглэгчийн тохиргоог серверээс **ачаалах** (`loadPrefs: async () => {...}`) hook байхгүй — олон төхөөрөмж хооронд тохиргоо дагахгүй.
+### Эн тэргүүнд — бүгд хэрэгжсэн (§1c)
 
 ### Дунд хугацаанд
+5b. **Тодролын шалгалтыг цааш хурдасгах.** Дэвсгэрийн кэш 1.4–1.5× л өгсөн; одоо `color-contrast`-ийн хугацааны дийлэнх нь элемент бүрийн `getComputedStyle` + `isVisible` (`checkVisibility`, `getBoundingClientRect`). Нэг аудитын хүрээнд computed style-ийн кэш, харагдах байдлыг эцгээс өвлүүлэх (`display:none` эцэгтэй бол хүүхдийг шалгахгүй) замаар дахин 2× орчим боломжтой.
 6. **Монгол бичгийн (ᠮᠣᠩᠭᠣᠯ) босоо текстийн дэмжлэг.** `writing-mode: vertical-lr` контентод 1.4.10 reflow, 2.5.8 target size, уншлагын шугам (хэвтээ биш босоо) тусгай логик хэрэгтэй.
 7. **Орос, казах хэлний UI орчуулга.** `STRINGS`-д `ru`, `kk` нэмэх — Монголын сайтуудын хоёрдогч хэл.
 8. **Браузерын extension (Chrome/Firefox).** Ижил `auditPage()` хөдөлгүүрээр ямар ч сайтыг (суулгалтгүй) шалгах. Хууль хяналтын байгууллага, аудиторт хэрэгтэй.

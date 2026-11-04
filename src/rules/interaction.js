@@ -14,11 +14,18 @@ function isInlineInText(el) {
   return total - normalize(el.textContent).length > 5;
 }
 
-/** CSSOM-оос фокусын тоймыг арилгасан дүрмүүдийг хайна */
+/** CSSOM-оос фокусын тоймыг арилгасан дүрмүүдийг хайна (@media, @supports, @layer, @import, үүрлэсэн дүрэм) */
 function* walkRules(rules) {
   for (const r of rules) {
-    if (r.cssRules && !(r instanceof CSSStyleRule)) yield* walkRules(r.cssRules);
-    else if (r instanceof CSSStyleRule) { yield r; if (r.cssRules?.length) yield* walkRules(r.cssRules); }
+    if (r.styleSheet && !r.cssRules) {
+      // @import — CORS-оор хаалттай бол алгасна
+      let imported = null;
+      try { imported = r.styleSheet.cssRules; } catch { /* ignore */ }
+      if (imported) yield* walkRules(imported);
+      continue;
+    }
+    if (r.selectorText !== undefined) { yield r; if (r.cssRules?.length) yield* walkRules(r.cssRules); }
+    else if (r.cssRules) yield* walkRules(r.cssRules);
   }
 }
 
@@ -52,10 +59,10 @@ export default [
       let anyFvIndicator = false;
       const hasIndicator = (st) => (st.outlineStyle && st.outlineStyle !== 'none' && st.outlineWidth !== '0px') || (st.boxShadow && st.boxShadow !== 'none') || (st.outline && !/^(none|0|0px)$/.test(st.outline));
       const baseOf = (s) => s.replace(/:focus-visible|:focus(?!-within)/g, '').replace(/:where\(\s*\)|:is\(\s*\)/g, '').trim().replace(/^\*$/, '');
-      for (const sheet of ctx.doc.styleSheets) {
+      for (const sheet of ctx.sheets || ctx.doc.styleSheets) {
         if (sheet.ownerNode?.hasAttribute?.('data-hurteemj-ui')) continue;
         let rules;
-        try { rules = sheet.cssRules; } catch { continue; } // CORS — уншиж чадахгүй
+        try { rules = sheet.cssRules; } catch { continue; } // CORS — уншиж чадахгүй (fetchStyles идэвхтэй бол ctx.sheets-д задалсан хувь бий)
         for (const r of walkRules(rules)) {
           const sel = r.selectorText || '';
           if (!/:focus/.test(sel)) continue;

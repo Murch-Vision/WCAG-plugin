@@ -62,7 +62,7 @@ function normalizeResult(rule, res, config, pathCache) {
  * @param {Element|Document} [p.scope] — хэсэгчилсэн (MutationObserver) аудитын хүрээ
  * @param {boolean} [p.deep] — DOM-ыг түр өөрчилдөг гүн шалгалтыг (1.4.12 clip) оруулах
  */
-export function runAudit({ doc, win, config, scope, deep = false, runtime, changes, clickTracked, pageLang }) {
+export function runAudit({ doc, win, config, scope, deep = false, runtime, changes, clickTracked, pageLang, sheets }) {
   const t0 = (win.performance || Date).now();
   const partial = scope && scope !== doc;
   const ctx = {
@@ -70,16 +70,22 @@ export function runAudit({ doc, win, config, scope, deep = false, runtime, chang
     pageLang: pageLang || (doc.documentElement.lang || config.lang || 'en').split('-')[0].toLowerCase(),
     ignored: (el) => isIgnored(el, config.ignore),
     partial,
+    /** CSSOM sheet-үүд + fetch-ээр задалсан гадны sheet-үүд (2.4.7) */
+    sheets: [...doc.styleSheets, ...(sheets || [])],
+    /** Тодролын дэвсгэрийн кэш (нэг аудитын хүрээнд) */
+    bgCache: new WeakMap(),
   };
   const findings = [];
   const errors = [];
   const timings = {};
+  const rulesRun = [];
   const pathCache = createPathCache();
   const now = () => (win.performance || Date).now();
   for (const rule of activeRules(config)) {
     if (rule.deep && !deep) continue;
     if (partial && rule.run && !rule.scoped) continue;
     const tr = now();
+    let applicable = true;
     try {
       let results = [];
       if (rule.run) {
@@ -88,6 +94,7 @@ export function runAudit({ doc, win, config, scope, deep = false, runtime, chang
         const root = rule.root === 'document' ? doc : ctx.scope;
         let els = qsa(root, rule.selector);
         if (partial && scope.matches?.(rule.selector)) els.unshift(scope);
+        applicable = els.length > 0;
         for (const el of els) {
           if (ctx.ignored(el)) continue;
           const r = rule.evaluate(el, ctx);
@@ -103,12 +110,13 @@ export function runAudit({ doc, win, config, scope, deep = false, runtime, chang
       errors.push({ ruleId: rule.id, error: String(e && e.message || e) });
     }
     timings[rule.id] = Math.round((now() - tr) * 10) / 10;
+    rulesRun.push({ id: rule.id, sc: rule.sc, applicable });
   }
   findings.sort((a, b) => (a.outcome === b.outcome ? 0 : a.outcome === 'fail' ? -1 : 1) || IMPACT_ORDER[a.impact] - IMPACT_ORDER[b.impact]);
-  return buildReport({ doc, win, config, findings, errors, partial, duration: now() - t0, timings });
+  return buildReport({ doc, win, config, findings, errors, partial, duration: now() - t0, timings, rulesRun });
 }
 
-export function buildReport({ doc, win, config, findings, errors = [], partial = false, duration = 0, timings }) {
+export function buildReport({ doc, win, config, findings, errors = [], partial = false, duration = 0, timings, rulesRun }) {
   const bySC = {};
   for (const f of findings) for (const sc of f.sc) (bySC[sc] ||= { fail: 0, review: 0, fixed: 0 })[f.outcome]++;
   for (const f of findings) if (f.fixed) for (const sc of f.sc) bySC[sc].fixed++;
@@ -135,12 +143,16 @@ export function buildReport({ doc, win, config, findings, errors = [], partial =
     durationMs: Math.round(duration),
     /** Дүрэм бүрийн хугацаа (ms) — гүйцэтгэлийн оношилгоонд */
     timings: timings || null,
+    /** Ажилласан дүрмүүд ба хамаарах элемент байсан эсэх (EARL passed/inapplicable) */
+    rulesRun: rulesRun || null,
     summary: {
       fail: count('fail'),
       review: count('review'),
       fixed: findings.filter((f) => f.fixed).length,
       /** Засагдаагүй үлдсэн зөрчил */
       remaining: findings.filter((f) => f.outcome === 'fail' && !f.fixed).length,
+      /** AI/гадны үйлчилгээгээр үүсгэсэн (хүн баталгаажуулах) засвар */
+      generated: findings.filter((f) => f.generated).length,
       byImpact: Object.fromEntries(['critical', 'serious', 'moderate', 'minor'].map((i) => [i, findings.filter((f) => f.impact === i && f.outcome === 'fail' && !f.fixed).length])),
       criteria: {
         total: criteria.length,
@@ -223,8 +235,9 @@ export async function applyFixes(report, { doc, win, config, runtime, changes, p
       const res = await rule.fix.apply(f, { ...ctxBase, tier });
       if (res) {
         f.fixed = true;
-        f.fix = res;
+        f.fix = { mn: res.mn, en: res.en };
         f.fixTier = rule.fix.tier;
+        if (res.generated) f.generated = true;
         fixed++;
         if (rule.fix.once) onceDone.set(rule.id, res);
       }
@@ -234,6 +247,7 @@ export async function applyFixes(report, { doc, win, config, runtime, changes, p
   }
   report.summary.fixed = report.findings.filter((x) => x.fixed).length;
   report.summary.remaining = report.findings.filter((x) => x.outcome === 'fail' && !x.fixed).length;
+  report.summary.generated = report.findings.filter((x) => x.generated).length;
   for (const k of Object.keys(report.summary.byImpact)) {
     report.summary.byImpact[k] = report.findings.filter((x) => x.impact === k && x.outcome === 'fail' && !x.fixed).length;
   }

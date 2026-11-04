@@ -29,6 +29,10 @@ export const DEFAULTS = {
   statementUrl: null,
   feedbackUrl: null,
   nonce: null,
+  /** CORS-оор хаалттай гадны CSS-ийг fetch-ээр татаж 2.4.7 шалгалтад оруулах */
+  fetchStyles: true,
+  /** async () => Partial<Preferences> — серверээс (нэвтэрсэн хэрэглэгч) тохиргоо ачаалах */
+  loadPrefs: null,
 };
 
 /** data-* атрибут ↔ тохиргооны түлхүүр */
@@ -37,11 +41,11 @@ export const ATTR_MAP = {
   position: 'position', color: 'color', focusColor: 'focus-color', statementUrl: 'statement-url', feedbackUrl: 'feedback-url',
   reportEndpoint: 'report-endpoint', ignore: 'ignore', shortcut: 'shortcut', observe: 'observe', audit: 'audit',
   deep: 'deep', storage: 'storage', console: 'console', languages: 'languages', only: 'only', nonce: 'nonce',
-  reportSampleRate: 'report-sample-rate', offsetX: 'offset-x', offsetY: 'offset-y',
+  reportSampleRate: 'report-sample-rate', offsetX: 'offset-x', offsetY: 'offset-y', fetchStyles: 'fetch-styles',
 };
 
 const LIST_KEYS = new Set(['ignore', 'languages', 'only']);
-const BOOL_KEYS = new Set(['auditor', 'widget', 'launcher', 'observe', 'audit', 'deep', 'console', 'respectOS']);
+const BOOL_KEYS = new Set(['auditor', 'widget', 'launcher', 'observe', 'audit', 'deep', 'console', 'respectOS', 'fetchStyles']);
 /** Мөр эсвэл false байж болох түлхүүрүүд */
 const STRING_OR_FALSE = new Set(['fix', 'storage', 'shortcut']);
 const STRING_KEYS = new Set(['lang', 'uiLang', 'color', 'focusColor', 'statementUrl', 'feedbackUrl', 'reportEndpoint', 'nonce', 'storageKey', 'cookieDomain', 'shortcutLabel']);
@@ -116,7 +120,8 @@ export function normalizeConfig(...layers) {
   if (c.uiLang) c.uiLang = String(c.uiLang).toLowerCase();
   if (c.uiLang && !c.languages.includes(c.uiLang)) c.languages = [c.uiLang, ...c.languages];
 
-  for (const k of ['audit', 'deep', 'observe', 'widget', 'launcher', 'auditor', 'respectOS', 'console']) c[k] = c[k] === 'false' ? false : !!c[k];
+  for (const k of ['audit', 'deep', 'observe', 'widget', 'launcher', 'auditor', 'respectOS', 'console', 'fetchStyles']) c[k] = c[k] === 'false' ? false : !!c[k];
+  if (c.loadPrefs != null && typeof c.loadPrefs !== 'function') bad('loadPrefs', typeof c.loadPrefs, null);
   if (c.shortcut === false || c.shortcut === 'false' || c.shortcut === 'none') c.shortcut = null;
 
   c.warnings = warnings;

@@ -18,6 +18,8 @@ import { RULES } from './rules/index.js';
 import { idle } from './core/dom.js';
 import { trackListeners, trackedTargets } from './core/listeners.js';
 import { detectLang } from './rules/structure.js';
+import { loadExternalSheets } from './core/stylesheets.js';
+import { toEARL } from './core/earl.js';
 
 export const VERSION = '__VERSION__';
 
@@ -60,14 +62,24 @@ export function init(userConfig = {}) {
   let widget = null;
   let observer = null;
 
+  let sheetsPromise = null;
+  /** Гадны CSS-ийг нэг удаа татна (бүтэн аудитад л хэрэгтэй — хэсэгчилсэн аудит run-дүрэм ажиллуулдаггүй) */
+  const externalSheets = () => {
+    if (!config.fetchStyles) return Promise.resolve([]);
+    if (!sheetsPromise) sheetsPromise = loadExternalSheets(doc).catch(() => []);
+    return sheetsPromise;
+  };
+
   async function audit({ deep = config.deep, fix = true, scope } = {}) {
+    if (state.destroyed) return state.report;
+    const sheets = scope ? [] : await externalSheets();
     if (state.destroyed) return state.report;
     state.busy = true;
     try {
-      const rep = runAudit({ doc, win, config, deep, runtime, changes, clickTracked, pageLang: pageLang(), scope });
+      const rep = runAudit({ doc, win, config, deep, runtime, changes, clickTracked, pageLang: pageLang(), scope, sheets });
       if (fix && config.fix) await applyFixes(rep, { doc, win, config, runtime, changes, pageLang: pageLang() });
       if (scope && state.report) {
-        state.report = buildReport({ doc, win, config, findings: mergeFindings(state.report.findings, rep.findings), errors: state.report.errors.concat(rep.errors) });
+        state.report = buildReport({ doc, win, config, findings: mergeFindings(state.report.findings, rep.findings), errors: state.report.errors.concat(rep.errors), rulesRun: state.report.rulesRun });
       } else {
         state.report = rep;
       }
@@ -97,8 +109,8 @@ export function init(userConfig = {}) {
     state.busy = true;
     changes.revert(ruleId);
     if (state.report) {
-      for (const f of state.report.findings) if (!ruleId || f.ruleId === ruleId) { f.fixed = false; f.fix = null; }
-      state.report = buildReport({ doc, win, config, findings: state.report.findings, errors: state.report.errors });
+      for (const f of state.report.findings) if (!ruleId || f.ruleId === ruleId) { f.fixed = false; f.fix = null; f.generated = false; }
+      state.report = buildReport({ doc, win, config, findings: state.report.findings, errors: state.report.errors, rulesRun: state.report.rulesRun });
     }
     observer?.drop();
     state.busy = false;
@@ -156,6 +168,8 @@ export function init(userConfig = {}) {
     get language() { return uiLang; },
     announce: (text, p) => runtime.announce(text, p),
     toJSON: () => (state.report ? serialize(state.report, uiLang) : null),
+    /** EARL / JSON-LD (W3C Evaluation and Report Language) тайлан — ACT Rules-тэй уялдсан */
+    toEARL: () => (state.report ? toEARL(state.report, { lang: uiLang }) : null),
     changes: () => changes.summary(),
     destroy() {
       state.destroyed = true;
@@ -172,6 +186,14 @@ export function init(userConfig = {}) {
   const start = async () => {
     if (state.destroyed) return;
     runtime.ensureBase();
+    // Серверээс хэрэглэгчийн тохиргоо ачаалах (олон төхөөрөмж хооронд дагана); алдаа гарвал локал/анхдагч
+    if (typeof config.loadPrefs === 'function') {
+      try {
+        const remote = await Promise.race([config.loadPrefs(), new Promise((r) => win.setTimeout(() => r(null), config.loadPrefsTimeout || 3000))]);
+        if (state.destroyed) return;
+        if (remote && typeof remote === 'object') prefs.set(remote, { silent: true });
+      } catch { /* сервер алдаа — локал тохиргоо хэвээр */ }
+    }
     prefs.apply();
     if (config.widget) {
       widget = createWidget({
@@ -217,5 +239,6 @@ function logReport(rep, lang) {
 
 export const criteria = CRITERIA;
 export const rules = RULES.map((r) => ({ id: r.id, sc: r.sc, impact: r.impact, fix: r.fix ? r.fix.tier : null, deep: !!r.deep }));
-export { DEFAULTS, configFromScript, normalizeConfig, criteriaForLevel, STRINGS, PROFILES, DEFAULT_PREFS, trackListeners, serialize };
+export { DEFAULTS, configFromScript, normalizeConfig, criteriaForLevel, STRINGS, PROFILES, DEFAULT_PREFS, trackListeners, serialize, toEARL, loadExternalSheets };
+export { ACT_RULES, actRulesFor } from './wcag/act.js';
 export default { init, auditPage, criteria, rules, version: VERSION, trackListeners };
