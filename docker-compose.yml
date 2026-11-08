@@ -1,0 +1,20 @@
+services:
+  scanner:
+    build: .
+    image: hurteemj-scanner
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - hurteemj-data:/data
+    environment:
+      HJ_CONCURRENCY: "2"
+      HJ_MAX_PAGES: "50"
+      HJ_PUBLIC_URL: "http://localhost:8080"
+      # HJ_ADMIN_KEY, HJ_WEBHOOK_SECRET зэрэг нууц утгыг .env файлаар өгнө (git-д оруулахгүй)
+      HJ_ADMIN_KEY: ${HJ_ADMIN_KEY:-}
+      HJ_WEBHOOK_SECRET: ${HJ_WEBHOOK_SECRET:-}
+    # Chromium-д хуваалцсан санах ой
+    shm_size: "512mb"
+volumes:
+  hurteemj-data:

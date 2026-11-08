@@ -32,3 +32,27 @@ jobs:
           name: violations-report
           path: report.json
           if-no-files-found: ignore
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build scanner image
+        run: docker build -t hurteemj-scanner .
+      - name: Run container and check health + API auth
+        run: |
+          docker run -d --name hj -p 8080:8080 -e HJ_ADMIN_KEY=hj_ci_test_key hurteemj-scanner
+          for i in $(seq 1 30); do curl -sf localhost:8080/api/health && break; sleep 2; done
+          curl -sf localhost:8080/api/health
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/api/sites)" = 401
+          curl -sf -H "Authorization: Bearer hj_ci_test_key" localhost:8080/api/sites
+          curl -sf localhost:8080/ | grep -q 'Хүртээмж'
+      - name: Scan a page inside the container
+        run: |
+          ID=$(curl -sf -X POST localhost:8080/api/scans -H "Authorization: Bearer hj_ci_test_key" -H 'Content-Type: application/json' -d '{"url":"https://example.com/"}' | jq -r .scan.id)
+          for i in $(seq 1 60); do S=$(curl -sf -H "Authorization: Bearer hj_ci_test_key" localhost:8080/api/scans/$ID | jq -r .scan.status); [ "$S" = queued ] || [ "$S" = running ] || break; sleep 2; done
+          curl -sf -H "Authorization: Bearer hj_ci_test_key" localhost:8080/api/scans/$ID | jq '.scan | {status, score, grade, error}'
+          test "$S" = done
+      - if: always()
+        run: docker logs hj || true

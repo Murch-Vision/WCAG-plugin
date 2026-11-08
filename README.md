@@ -1,6 +1,6 @@
 # Хүртээмж (hurteemj) — WCAG 2.2 plugin
 
-Энэ plugin нь вэб сайтыг WCAG 2.2 (ISO/IEC 40500) шаардлагаар шалгаж, эрсдэлгүй алдааг засаж, хэрэглэгчид сайтыг өөрт тааруулах самбар өгнө. Ямар ч системд нэг мөр кодоор холбогдоно.
+Энэ plugin нь вэб сайтыг WCAG 2.2 (ISO/IEC 40500) шаардлагаар шалгаж, эрсдэлгүй алдааг засаж, хэрэглэгчид сайтыг өөрт тааруулах самбар өгнө. Ямар ч системд нэг мөр кодоор холбогдоно. Мөн **скан үйлчилгээ** болгон серверт ажиллуулж, ямар ч сайтын хүртээмжийг URL-аар нь үнэлж, оноо, түүх, тайланг REST API-аар бусад системд нийлүүлнэ.
 
 ```html
 <script src="hurteemj.min.js" data-fix="safe" defer></script>
@@ -15,6 +15,7 @@
 | **1. Аудит** | 65 дүрэм, WCAG 2.2-ын 86 шалгуурын 47-д нь автомат шалгалттай. 9 шинэ шалгуурын 7-г хамардаг: Focus Not Obscured, Target Size 24px (spacing exception-тэй), Accessible Authentication (бодит paste туршилт), Consistent Help, Dragging Movements, Focus Appearance. Үр дүнг `fail` ба `review` гэж ялгана |
 | **2. Засвар** | `safe` горим: lang, viewport zoom, skip link, 2.4.13 фокусын тойм, sticky header-ийн ард фокус далдлагдахаас хамгаалах, `role=status`, `aria-required` г.м. `heuristic` горим: icon-оос нэр таах, брэндийн өнгийг хадгалсан тодролын засвар, `div[onclick]`-т гарын дэмжлэг. Бүх засвар бүртгэгдэж, `revert()`-оор буцаагдана |
 | **3. Хэрэглэгчийн самбар** | Текстийн хэмжээ, 1.4.12 текстийн зай, уншихад хялбар фонт, 4 тодролын горим, ханалт, хөдөлгөөн/GIF зогсоох, фокус тодруулах, том курсор, товч томруулах, уншлагын шугам/маск, TTS. 6 бэлэн профайлтай. Самбар өөрөө WCAG 2.2 AA-г хангаж, axe-core-оор шалгагддаг |
+| **5. Скан үйлчилгээ** | Сервер + самбар + REST API ([docs/SCANNER.md](docs/SCANNER.md)): URL өгөхөд сайтыг crawl хийж (компьютер ба 320px утас), 0–100 оноо, онооны түүх, хуваарьт шалгалт, HTML/CSV/JSON/EARL тайлан, HMAC гарын үсэгтэй webhook, оноо-тэмдэг (badge), SSRF хамгаалалт, API түлхүүр, үйлдлийн бүртгэл. Docker-оор нэг командаар асна |
 | **4. Тайлан** | Самбар доторх хөгжүүлэгчийн тайлан, JSON экспорт, **EARL/JSON-LD** (W3C ACT Rules-тэй уялдсан — 38 дүрэм 53 ACT дүрэмтэй холбогдсон), `reportEndpoint` мониторинг, CLI (text/json/html/md/earl), CI-д exit code |
 
 ## Хурдан эхлэх
@@ -23,7 +24,19 @@
 npm install
 npx playwright install chromium   # тестэд (нэг удаа)
 npm run build        # dist/hurteemj.min.js (~50KB gzip), dist/hurteemj.esm.js
-npm test             # 40 тест: unit + regression + review + Playwright/Chromium + axe-core хөндлөн шалгалт
+npm test             # 61 тест: unit + regression + review + скан үйлчилгээ + Playwright/Chromium + axe-core
+```
+
+Скан үйлчилгээ (сайтуудыг URL-аар үнэлэх самбар + REST API, Node ≥ 22.13):
+
+```bash
+npm run server                 # http://localhost:8080 — анх асаахад админ API түлхүүр хэвлэнэ
+docker compose up -d           # эсвэл Docker-оор
+```
+
+```bash
+curl -X POST http://localhost:8080/api/scans -H "Authorization: Bearer $HJ_KEY" \
+  -H "Content-Type: application/json" -d '{"url":"https://www.example.mn","maxPages":10,"viewports":["desktop","mobile"]}'
 ```
 
 TypeScript тодорхойлолт (`types/index.d.ts`) багцад орсон: `import type { Config, Report } from 'hurteemj'`.
@@ -36,6 +49,7 @@ const hj = init({ level: 'AA', fix: 'safe', uiLang: 'mn', statementUrl: '/access
 ```bash
 npx hurteemj-audit https://example.mn --fail-on serious --format html --out report.html
 npx hurteemj-audit https://example.mn --format earl --out report.earl.json   # W3C EARL / ACT
+npx hurteemj-audit https://example.mn --max-pages 10 --min-score 80            # crawl + онооны босго
 ```
 
 ## Интеграц
@@ -108,7 +122,10 @@ src/
   fix/runtime.js       фокусын тойм, focus guard, live region
   prefs/preferences.js хэрэглэгчийн тохиргоо, профайл
   ui/widget.js         самбар (Shadow DOM)
+src/node/              Node талын скан цөм: scan.js (crawl), netguard.js (SSRF), report.js
+src/core/score.js      0–100 оноо (нөлөөллөөр жинлэсэн)
 cli/audit.js           CI/CD аудит (Playwright)
+server/                скан үйлчилгээ: db.js (SQLite), queue.js, app.js (REST API), public/ (самбар)
 types/index.d.ts       TypeScript тодорхойлолт
 integrations/          react, vue, web-component, wordpress
 examples/              demo, csp, web-component, report-server

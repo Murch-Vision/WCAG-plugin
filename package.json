@@ -1,7 +1,7 @@
 {
   "name": "hurteemj",
   "version": "1.0.0",
-  "description": "WCAG 2.2 (ISO/IEC 40500) аудит, аюулгүй засвар, хэрэглэгчийн тохиргооны нэгдсэн plugin. Ямар ч системд нэг мөр кодоор холбогдоно.",
+  "description": "WCAG 2.2 (ISO/IEC 40500) аудит, аюулгүй засвар, хэрэглэгчийн тохиргоо, сайтын хүртээмжийн скан үйлчилгээ. Ямар ч системд нэг мөр кодоор эсвэл REST API-аар холбогдоно.",
   "type": "module",
   "main": "dist/hurteemj.esm.js",
   "module": "dist/hurteemj.esm.js",
@@ -19,14 +19,16 @@
     "./dist/*": "./dist/*"
   },
   "bin": {
-    "hurteemj-audit": "cli/audit.js"
+    "hurteemj-audit": "cli/audit.js",
+    "hurteemj-scanner": "server/index.js"
   },
   "files": [
     "dist",
     "src",
     "integrations",
     "cli",
-    "types"
+    "types",
+    "server"
   ],
   "sideEffects": [
     "./dist/hurteemj.min.js",
@@ -41,7 +43,9 @@
     "test": "npm run build && node --test test/*.test.js",
     "docs": "node scripts/gen-docs.js",
     "prepublishOnly": "npm run build && npm run docs",
-    "audit:url": "node cli/audit.js"
+    "audit:url": "node cli/audit.js",
+    "server": "node server/index.js",
+    "server:key": "node server/index.js keys create"
   },
   "peerDependencies": {
     "playwright": ">=1.40",

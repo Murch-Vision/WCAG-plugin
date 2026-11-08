@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Хүртээмж — сайтын хүртээмжийн үнэлгээ</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script type="module" src="/app.js" nonce="__NONCE__"></script>
+<!-- Самбар өөрөө Хүртээмж plugin-ийг ашиглана (хэрэглэгчийн тохиргоо; засвар, аудит унтраалттай) -->
+<script src="/static/hurteemj.min.js" nonce="__NONCE__" data-fix="false" data-audit="false" data-observe="false" data-position="bottom-left" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Үндсэн агуулга руу шилжих</a>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="#/">
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="11" fill="currentColor"/><circle cx="12" cy="6.4" r="1.9" fill="#fff"/><path d="M6 9.4c2 .6 4 .9 6 .9s4-.3 6-.9l.4 1.6c-1.6.5-3.2.8-4.7 1v2.6l1.8 5.6-1.6.5-1.9-4.9-1.9 4.9-1.6-.5 1.8-5.6V12c-1.5-.2-3.1-.5-4.7-1z" fill="#fff"/></svg>
+      <span>Хүртээмж <small>WCAG 2.2 үнэлгээ</small></span>
+    </a>
+    <nav aria-label="Үндсэн цэс" id="nav" hidden>
+      <ul>
+        <li><a href="#/" data-nav="sites">Сайтууд</a></li>
+        <li><a href="#/scans" data-nav="scans">Шалгалтууд</a></li>
+        <li><a href="#/settings" data-nav="settings">Тохиргоо ба API</a></li>
+        <li><button type="button" class="link" id="logout">Гарах</button></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+<main id="main" class="wrap" tabindex="-1"></main>
+<div class="sr-only" role="status" aria-live="polite" id="live"></div>
+<footer class="wrap foot">
+  <p>Автомат шалгалт WCAG-ийн бүх шаардлагыг илрүүлэхгүй. Оноо нь нийцлийн баталгаа биш — гараар шалгах шалгууруудыг мэргэжилтэн хянана.</p>
+</footer>
+</body>
+</html>
